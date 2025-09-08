@@ -120,15 +120,16 @@ def parse_pp_response(resp):
             if k in resp and resp[k]:
                 pix_payload = str(resp[k])
                 break
-        for k in ("qr_code_base64", "qr_base64", "qrcode_base64"):
-            if k in resp and resp[k]:
-                qr_b64 = str(resp[k])
-                break
         for k in ("id", "transaction_id", "txid"):
             if k in resp and resp[k]:
                 tid = str(resp[k])
                 break
-    if not qr_b64 and pix_payload:
+        if not pix_payload:
+            for k in ("qr_code_base64", "qr_base64", "qrcode_base64"):
+                if k in resp and resp[k]:
+                    qr_b64 = str(resp[k])
+                    break
+    if pix_payload:
         img = qr_png_from_payload(pix_payload).getvalue()
         qr_b64 = base64.b64encode(img).decode("utf-8")
     return pix_payload, qr_b64, tid
@@ -273,7 +274,8 @@ def api_pay_create():
         return jsonify({"ok": False, "error": "Não autenticado."}), 401
     created_at = datetime.utcnow()
     reference = f"user:{user_id}|plan:{plan['key']}|ts:{int(created_at.timestamp())}"
-    webhook_url = request.url_root.strip('/').rstrip('/') + url_for('pushinpay_webhook')
+    base = request.url_root.rstrip('/')
+    webhook_url = base + url_for('pushinpay_webhook')
     try:
         pp_resp = create_pix_pushinpay(plan['price_cents'], webhook_url=webhook_url, reference=reference)
     except Exception:
