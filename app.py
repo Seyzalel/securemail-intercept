@@ -1,22 +1,31 @@
 import os
 import re
+import io
+import json
+import base64
+import hmac
+import hashlib
 import logging
-from datetime import timedelta, datetime
+from datetime import datetime, timedelta, timezone
 from urllib.parse import quote_plus
 from functools import wraps
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify
+
+import requests
+import qrcode
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, send_file, abort
 from werkzeug.security import generate_password_hash, check_password_hash
-from pymongo import MongoClient, ASCENDING
+from pymongo import MongoClient, ASCENDING, ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
 app = Flask(__name__, template_folder='.')
-app.config['SECRET_KEY'] = 'qvF@9mG#7rKpX3Z!eA6Lw2Y^uJh5NbTdCxMzVb1RsEpQgUoIiHtKk+0P*sDfWnEl'
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'qvF@9mG#7rKpX3Z!eA6Lw2Y^uJh5NbTdCxMzVb1RsEpQgUoIiHtKk+0P*sDfWnEl')
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = True
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
 
 logging.basicConfig(level=logging.INFO)
+
 USER = quote_plus(os.environ.get('DB_USER', 'seyzalel_db_user'))
 PWD = quote_plus(os.environ.get('DB_PASS', 'pAd1F4iscPwdyRvV'))
 MONGO_URI = f"mongodb+srv://{USER}:{PWD}@securemail.r9xmnzl.mongodb.net/?retryWrites=true&w=majority&appName=SecureMail"
@@ -24,9 +33,25 @@ client = MongoClient(MONGO_URI)
 db = client['securemail']
 db.users.create_index([('username_lower', ASCENDING)], unique=True)
 db.users.create_index([('email_lower', ASCENDING)], unique=True)
+db.orders.create_index([('transaction_id', ASCENDING)], unique=True)
+db.orders.create_index([('user_id', ASCENDING), ('created_at', ASCENDING)])
+
+PUSHINPAY_TOKEN = os.getenv("PUSHINPAY_TOKEN")
+PUSHINPAY_BASE_URL = os.getenv("PUSHINPAY_BASE_URL", "https://api.pushinpay.com.br")
+WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
+HEADERS_PP = {"Authorization": f"Bearer {PUSHINPAY_TOKEN or ''}", "Accept": "application/json", "Content-Type": "application/json"}
+
+PLANS = {
+    "basic-15": {"key": "basic-15", "name": "Básico", "price_cents": 3500, "price_display": "R$35", "period": "15 dias", "duration_days": 15, "limit_per_day": 5, "support": "WhatsApp", "lifetime": False},
+    "standard-30": {"key": "standard-30", "name": "Padrão", "price_cents": 5000, "price_display": "R$50", "period": "30 dias", "duration_days": 30, "limit_per_day": 10, "support": "WhatsApp prioritário", "lifetime": False},
+    "advanced-30": {"key": "advanced-30", "name": "Avançado", "price_cents": 9700, "price_display": "R$97", "period": "30 dias", "duration_days": 30, "limit_per_day": 25, "support": "WhatsApp 24/7 prioritário", "lifetime": False},
+    "lifetime": {"key": "lifetime", "name": "Vitalício", "price_cents": 13900, "price_display": "R$139", "period": "vitalício", "duration_days": None, "limit_per_day": 20, "support": "WhatsApp 24/7 prioritário", "lifetime": True},
+}
+
+NAME_TO_KEY = {v["name"].lower(): k for k, v in PLANS.items()}
 
 def is_email(v):
-    return re.match(r'^[^\s@]+@[^\s@]+\.[^\s@]+$', v) is not None
+    return re.match(r'^[^\s@]+@[^\s@]+\.[^\s@]+$', v or '') is not None
 
 def valid_password(p):
     if not p or len(p) < 8:
@@ -36,6 +61,12 @@ def valid_password(p):
     if not re.search(r'[0-9]', p):
         return False
     return True
+
+def normalize_cpf(cpf):
+    return re.sub(r'\D+', '', cpf or '')
+
+def valid_fullname(n):
+    return bool(re.match(r"^[A-Za-zÀ-ÖØ-öø-ÿ'’-]+(?:\s+[A-Za-zÀ-ÖØ-öø-ÿ'’-]+)+$", (n or '').strip()))
 
 def login_required(f):
     @wraps(f)
@@ -52,6 +83,98 @@ def secure_headers(resp):
     resp.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
     resp.headers['Permissions-Policy'] = 'geolocation=(), microphone=(), camera=()'
     return resp
+
+def create_pix_pushinpay(value_cents, webhook_url=None, reference=None):
+    if not PUSHINPAY_TOKEN:
+        raise RuntimeError("PUSHINPAY_TOKEN não definido")
+    url = f"{PUSHINPAY_BASE_URL}/api/pix/cashIn"
+    body = {"value": int(value_cents)}
+    if webhook_url:
+        body["webhook_url"] = webhook_url
+    if reference:
+        body["reference"] = reference
+    r = requests.post(url, headers=HEADERS_PP, json=body, timeout=15)
+    r.raise_for_status()
+    return r.json()
+
+def consult_pp(transaction_id):
+    if not PUSHINPAY_TOKEN:
+        raise RuntimeError("PUSHINPAY_TOKEN não definido")
+    url = f"{PUSHINPAY_BASE_URL}/api/transactions/{transaction_id}"
+    r = requests.get(url, headers=HEADERS_PP, timeout=10)
+    r.raise_for_status()
+    return r.json()
+
+def qr_png_from_payload(payload_text):
+    qr = qrcode.QRCode(box_size=8, border=2)
+    qr.add_data(payload_text)
+    qr.make(fit=True)
+    img = qr.make_image()
+    bio = io.BytesIO()
+    img.save(bio, format="PNG")
+    bio.seek(0)
+    return bio
+
+def parse_pp_response(resp):
+    pix_payload = None
+    qr_b64 = None
+    tid = None
+    if isinstance(resp, dict):
+        for k in ("qr_code", "payload", "pix", "copiacolapix", "pix_string"):
+            if k in resp and resp[k]:
+                pix_payload = str(resp[k])
+                break
+        for k in ("qr_code_base64", "qr_base64", "qrcode_base64"):
+            if k in resp and resp[k]:
+                qr_b64 = str(resp[k])
+                break
+        for k in ("id", "transaction_id", "txid"):
+            if k in resp and resp[k]:
+                tid = str(resp[k])
+                break
+    if not qr_b64 and pix_payload:
+        img = qr_png_from_payload(pix_payload).getvalue()
+        qr_b64 = base64.b64encode(img).decode("utf-8")
+    return pix_payload, qr_b64, tid
+
+def order_deadline_secs(created_at):
+    exp = created_at + timedelta(minutes=10)
+    now = datetime.utcnow()
+    return max(0, int((exp - now).total_seconds()))
+
+def activate_user_plan(user_id, plan):
+    now = datetime.utcnow()
+    expires_at = None if plan["lifetime"] else now + timedelta(days=plan["duration_days"])
+    update = {
+        "plan": {
+            "key": plan["key"],
+            "name": plan["name"],
+            "activated_at": now,
+            "expires_at": expires_at,
+            "limit_per_day": plan["limit_per_day"],
+            "support": plan["support"],
+            "period": plan["period"],
+        }
+    }
+    db.users.find_one_and_update({"_id": db.users.find_one({"_id": db.users.find_one({"_id": session.get("user_id")})})}, {"$set": update})
+    db.users.update_one({"_id": db.users.find_one({"_id": session.get("user_id")})}, {"$set": update})
+    db.users.update_one({"_id": session.get("user_id")}, {"$set": update})
+
+def safe_user_id():
+    return session.get("user_id")
+
+def get_user():
+    uid = safe_user_id()
+    if not uid:
+        return None
+    return db.users.find_one({"_id": db.users.find_one({"_id": uid})}) or db.users.find_one({"_id": uid})
+
+def plan_by_key_or_name(plan_key=None, plan_name=None):
+    if plan_key and plan_key in PLANS:
+        return PLANS[plan_key]
+    if plan_name and plan_name.lower() in NAME_TO_KEY:
+        return PLANS[NAME_TO_KEY[plan_name.lower()]]
+    return None
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -76,20 +199,12 @@ def register():
     if existing:
         return jsonify({'ok': False, 'error': 'Usuário ou e-mail já cadastrado.'}), 409
     try:
-        user = {
-            'username': username,
-            'username_lower': username.lower(),
-            'email': email,
-            'email_lower': email.lower(),
-            'password_hash': generate_password_hash(password),
-            'created_at': datetime.utcnow(),
-            'last_login_at': None
-        }
+        user = {'_id': str(os.urandom(12).hex()), 'username': username, 'username_lower': username.lower(), 'email': email, 'email_lower': email.lower(), 'password_hash': generate_password_hash(password), 'created_at': datetime.utcnow(), 'last_login_at': None}
         ins = db.users.insert_one(user)
     except DuplicateKeyError:
         return jsonify({'ok': False, 'error': 'Usuário ou e-mail já cadastrado.'}), 409
     session.clear()
-    session['user_id'] = str(ins.inserted_id)
+    session['user_id'] = user['_id']
     session['username'] = username
     session.permanent = False
     return redirect(url_for('dashboard'))
@@ -116,7 +231,7 @@ def login():
         return jsonify({'ok': False, 'error': 'Credenciais inválidas.'}), 401
     db.users.update_one({'_id': user['_id']}, {'$set': {'last_login_at': datetime.utcnow()}})
     session.clear()
-    session['user_id'] = str(user['_id'])
+    session['user_id'] = user['_id']
     session['username'] = user['username']
     session.permanent = bool(remember)
     return redirect(url_for('dashboard'))
@@ -130,6 +245,215 @@ def dashboard():
 def logout():
     session.clear()
     return redirect(url_for('login'))
+
+@app.route('/plans', methods=['GET'])
+@login_required
+def plans():
+    return render_template('plans.html')
+
+@app.route('/gateway-pix-payment', methods=['GET'])
+@login_required
+def gateway_pix_payment():
+    return render_template('gateway-pix-payment.html')
+
+@app.route('/api/pay/create', methods=['POST'])
+@login_required
+def api_pay_create():
+    data = request.get_json(force=True, silent=True) or {}
+    plan_key = data.get('plan_key')
+    plan_name = data.get('plan_name')
+    fullname = (data.get('fullname') or '').strip()
+    cpf = normalize_cpf(data.get('cpf'))
+    plan = plan_by_key_or_name(plan_key, plan_name)
+    if not plan:
+        return jsonify({"ok": False, "error": "Plano inválido."}), 400
+    if not valid_fullname(fullname):
+        return jsonify({"ok": False, "error": "Nome completo inválido."}), 400
+    if not re.fullmatch(r'\d{11}', cpf or ''):
+        return jsonify({"ok": False, "error": "CPF inválido."}), 400
+    user_id = safe_user_id()
+    if not user_id:
+        return jsonify({"ok": False, "error": "Não autenticado."}), 401
+    created_at = datetime.utcnow()
+    reference = f"user:{user_id}|plan:{plan['key']}|ts:{int(created_at.timestamp())}"
+    webhook_url = request.url_root.strip('/').rstrip('/') + url_for('pushinpay_webhook')
+    try:
+        pp_resp = create_pix_pushinpay(plan['price_cents'], webhook_url=webhook_url, reference=reference)
+    except Exception as e:
+        return jsonify({"ok": False, "error": "Falha ao criar PIX."}), 502
+    pix_payload, qr_b64, tid = parse_pp_response(pp_resp)
+    if not tid:
+        tid = str(os.urandom(9).hex())
+    order = {
+        "_id": str(os.urandom(12).hex()),
+        "user_id": user_id,
+        "username": session.get("username"),
+        "plan": {k: v for k, v in plan.items()},
+        "fullname": fullname,
+        "cpf": cpf,
+        "transaction_id": tid,
+        "pix_payload": pix_payload,
+        "qr_png_base64": qr_b64,
+        "pushinpay_response": pp_resp,
+        "status": "pending",
+        "created_at": created_at,
+        "expires_at": created_at + timedelta(minutes=10),
+        "paid_at": None,
+    }
+    try:
+        db.orders.insert_one(order)
+    except DuplicateKeyError:
+        pass
+    return jsonify({"ok": True, "redirect": url_for('gateway_pix_payment', tid=tid)}), 201
+
+@app.route('/api/pay/info', methods=['GET'])
+@login_required
+def api_pay_info():
+    tid = request.args.get('tid')
+    user_id = safe_user_id()
+    order = None
+    if tid:
+        order = db.orders.find_one({"transaction_id": tid, "user_id": user_id})
+    if not order:
+        order = db.orders.find_one({"user_id": user_id}, sort=[("created_at", -1)])
+    if not order:
+        return jsonify({"ok": False, "error": "Pedido não encontrado."}), 404
+    now = datetime.utcnow()
+    deadline_seconds = max(0, int((order["expires_at"] - now).total_seconds())) if order.get("expires_at") else 0
+    return jsonify({
+        "ok": True,
+        "plan": {
+            "key": order["plan"]["key"],
+            "name": order["plan"]["name"],
+            "price_display": order["plan"]["price_display"],
+            "period": order["plan"]["period"],
+            "limit_per_day": order["plan"]["limit_per_day"],
+            "support": order["plan"]["support"],
+        },
+        "pix_payload": order.get("pix_payload"),
+        "qr_png_base64": order.get("qr_png_base64"),
+        "qr_url": url_for('api_pix_qr', transaction_id=order["transaction_id"]),
+        "transaction_id": order["transaction_id"],
+        "status": order.get("status"),
+        "deadline_seconds": deadline_seconds
+    })
+
+@app.route('/api/pay/status', methods=['GET'])
+@login_required
+def api_pay_status():
+    tid = request.args.get('tid')
+    if not tid:
+        return jsonify({"ok": False, "error": "tid ausente."}), 400
+    order = db.orders.find_one({"transaction_id": tid, "user_id": safe_user_id()})
+    if not order:
+        return jsonify({"ok": False, "error": "Pedido não encontrado."}), 404
+    status = order.get("status") or "pending"
+    if status not in ("paid", "expired"):
+        try:
+            pp = consult_pp(tid)
+            st = None
+            for k in ("status", "state", "payment_status"):
+                if isinstance(pp, dict) and k in pp:
+                    st = str(pp[k]).lower()
+                    break
+            if st in ("paid", "pago", "success", "confirmed"):
+                db.orders.find_one_and_update({"_id": order["_id"]}, {"$set": {"status": "paid", "paid_at": datetime.utcnow(), "pushinpay_last": pp}}, return_document=ReturnDocument.AFTER)
+                activate_user_plan(order["user_id"], order["plan"])
+                status = "paid"
+            else:
+                db.orders.update_one({"_id": order["_id"]}, {"$set": {"pushinpay_last": pp}})
+        except Exception:
+            pass
+        if status == "pending" and order.get("expires_at") and datetime.utcnow() > order["expires_at"]:
+            db.orders.update_one({"_id": order["_id"]}, {"$set": {"status": "expired"}})
+            status = "expired"
+    return jsonify({"ok": True, "status": status})
+
+@app.route('/api/pix/qr/<transaction_id>', methods=['GET'])
+@login_required
+def api_pix_qr(transaction_id):
+    order = db.orders.find_one({"transaction_id": transaction_id, "user_id": safe_user_id()})
+    pix_payload = order.get("pix_payload") if order else None
+    if not pix_payload:
+        try:
+            pp = consult_pp(transaction_id)
+            for k in ("qr_code", "payload", "pix", "copiacolapix", "pix_string"):
+                if k in pp and pp[k]:
+                    pix_payload = str(pp[k])
+                    break
+            if not pix_payload:
+                for k in ("qr_code_base64", "qr_base64", "qrcode_base64"):
+                    if k in pp and pp[k]:
+                        img_bytes = base64.b64decode(pp[k])
+                        return send_file(io.BytesIO(img_bytes), mimetype="image/png", download_name=f"qr_{transaction_id}.png")
+        except Exception:
+            pass
+    if not pix_payload:
+        return abort(404)
+    img = qr_png_from_payload(pix_payload)
+    return send_file(img, mimetype="image/png", download_name=f"qr_{transaction_id}.png")
+
+@app.route('/check/<transaction_id>', methods=['GET'])
+@login_required
+def check_transaction(transaction_id):
+    try:
+        resp = consult_pp(transaction_id)
+    except requests.HTTPError as e:
+        return jsonify({"error": "erro na API PushinPay", "detail": e.response.text}), 502
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    status = None
+    if isinstance(resp, dict):
+        for k in ("status", "state", "payment_status"):
+            if k in resp:
+                status = resp[k]
+                break
+    return jsonify({"status": status, "raw": resp})
+
+def verify_sig(raw_body, header_signature, secret):
+    if not secret or not header_signature:
+        return False
+    computed = hmac.new(secret.encode("utf-8"), raw_body, digestmod=hashlib.sha256).digest()
+    try:
+        hdr = header_signature.strip()
+        if hdr.startswith("sha256="):
+            hdr = hdr.split("=", 1)[1]
+        try:
+            hb = base64.b64decode(hdr)
+            if hmac.compare_digest(hb, computed):
+                return True
+        except Exception:
+            pass
+        try:
+            hx = hdr.replace("0x", "")
+            hb2 = bytes.fromhex(hx)
+            if hmac.compare_digest(hb2, computed):
+                return True
+        except Exception:
+            pass
+    except Exception:
+        pass
+    return False
+
+@app.route('/api/pushinpay/webhook', methods=['POST'])
+def pushinpay_webhook():
+    raw = request.get_data()
+    sig = request.headers.get("X-Pushinpay-Signature") or request.headers.get("X-Signature") or request.headers.get("Signature") or request.headers.get("Authorization")
+    verified = verify_sig(raw, sig, WEBHOOK_SECRET) if WEBHOOK_SECRET else False
+    try:
+        payload = request.get_json(force=True, silent=True) or {}
+    except Exception:
+        payload = {}
+    tid = payload.get("transaction_id") or payload.get("id") or payload.get("txid")
+    st = payload.get("status") or payload.get("state") or payload.get("payment_status")
+    if tid and st and str(st).lower() in ("paid", "pago", "success", "confirmed"):
+        order = db.orders.find_one_and_update({"transaction_id": str(tid)}, {"$set": {"status": "paid", "paid_at": datetime.utcnow(), "webhook_last": payload, "webhook_verified": verified}}, return_document=ReturnDocument.AFTER)
+        if order:
+            try:
+                activate_user_plan(order["user_id"], order["plan"])
+            except Exception:
+                pass
+    return jsonify({"ok": True, "verified": verified})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
