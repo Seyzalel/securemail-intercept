@@ -36,10 +36,10 @@ db.users.create_index([('email_lower', ASCENDING)], unique=True)
 db.orders.create_index([('transaction_id', ASCENDING)], unique=True)
 db.orders.create_index([('user_id', ASCENDING), ('created_at', ASCENDING)])
 
-PUSHINPAY_TOKEN = os.getenv("PUSHINPAY_TOKEN")
-PUSHINPAY_BASE_URL = os.getenv("PUSHINPAY_BASE_URL", "https://api.pushinpay.com.br")
+PUSHINPAY_TOKEN = "45911|0CnwU402QB1Zw1w15Lf69cDyQZtPd0RovG2TLjgQce6b6af1"
+PUSHINPAY_BASE_URL = "https://api.pushinpay.com.br"
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
-HEADERS_PP = {"Authorization": f"Bearer {PUSHINPAY_TOKEN or ''}", "Accept": "application/json", "Content-Type": "application/json"}
+HEADERS_PP = {"Authorization": f"Bearer {PUSHINPAY_TOKEN}", "Accept": "application/json", "Content-Type": "application/json"}
 
 PLANS = {
     "basic-15": {"key": "basic-15", "name": "Básico", "price_cents": 3500, "price_display": "R$35", "period": "15 dias", "duration_days": 15, "limit_per_day": 5, "support": "WhatsApp", "lifetime": False},
@@ -85,8 +85,6 @@ def secure_headers(resp):
     return resp
 
 def create_pix_pushinpay(value_cents, webhook_url=None, reference=None):
-    if not PUSHINPAY_TOKEN:
-        raise RuntimeError("PUSHINPAY_TOKEN não definido")
     url = f"{PUSHINPAY_BASE_URL}/api/pix/cashIn"
     body = {"value": int(value_cents)}
     if webhook_url:
@@ -98,8 +96,6 @@ def create_pix_pushinpay(value_cents, webhook_url=None, reference=None):
     return r.json()
 
 def consult_pp(transaction_id):
-    if not PUSHINPAY_TOKEN:
-        raise RuntimeError("PUSHINPAY_TOKEN não definido")
     url = f"{PUSHINPAY_BASE_URL}/api/transactions/{transaction_id}"
     r = requests.get(url, headers=HEADERS_PP, timeout=10)
     r.raise_for_status()
@@ -156,9 +152,7 @@ def activate_user_plan(user_id, plan):
             "period": plan["period"],
         }
     }
-    db.users.find_one_and_update({"_id": db.users.find_one({"_id": db.users.find_one({"_id": session.get("user_id")})})}, {"$set": update})
-    db.users.update_one({"_id": db.users.find_one({"_id": session.get("user_id")})}, {"$set": update})
-    db.users.update_one({"_id": session.get("user_id")}, {"$set": update})
+    db.users.update_one({"_id": user_id}, {"$set": update})
 
 def safe_user_id():
     return session.get("user_id")
@@ -167,7 +161,7 @@ def get_user():
     uid = safe_user_id()
     if not uid:
         return None
-    return db.users.find_one({"_id": db.users.find_one({"_id": uid})}) or db.users.find_one({"_id": uid})
+    return db.users.find_one({"_id": uid})
 
 def plan_by_key_or_name(plan_key=None, plan_name=None):
     if plan_key and plan_key in PLANS:
@@ -200,7 +194,7 @@ def register():
         return jsonify({'ok': False, 'error': 'Usuário ou e-mail já cadastrado.'}), 409
     try:
         user = {'_id': str(os.urandom(12).hex()), 'username': username, 'username_lower': username.lower(), 'email': email, 'email_lower': email.lower(), 'password_hash': generate_password_hash(password), 'created_at': datetime.utcnow(), 'last_login_at': None}
-        ins = db.users.insert_one(user)
+        db.users.insert_one(user)
     except DuplicateKeyError:
         return jsonify({'ok': False, 'error': 'Usuário ou e-mail já cadastrado.'}), 409
     session.clear()
@@ -227,7 +221,10 @@ def login():
             return jsonify({'ok': False, 'error': 'Usuário inválido.'}), 400
         q = {'username_lower': identity.lower()}
     user = db.users.find_one(q)
-    if not user or not check_password_hash(user['password_hash'], password):
+    if not user:
+        return jsonify({'ok': False, 'error': 'Credenciais inválidas.'}), 401
+    pwd_hash = user.get('password_hash')
+    if not pwd_hash or not check_password_hash(pwd_hash, password):
         return jsonify({'ok': False, 'error': 'Credenciais inválidas.'}), 401
     db.users.update_one({'_id': user['_id']}, {'$set': {'last_login_at': datetime.utcnow()}})
     session.clear()
@@ -279,11 +276,11 @@ def api_pay_create():
     webhook_url = request.url_root.strip('/').rstrip('/') + url_for('pushinpay_webhook')
     try:
         pp_resp = create_pix_pushinpay(plan['price_cents'], webhook_url=webhook_url, reference=reference)
-    except Exception as e:
+    except Exception:
         return jsonify({"ok": False, "error": "Falha ao criar PIX."}), 502
     pix_payload, qr_b64, tid = parse_pp_response(pp_resp)
     if not tid:
-        tid = str(os.urandom(9).hex())
+        return jsonify({"ok": False, "error": "Falha ao obter ID da transação."}), 502
     order = {
         "_id": str(os.urandom(12).hex()),
         "user_id": user_id,
@@ -445,14 +442,24 @@ def pushinpay_webhook():
     except Exception:
         payload = {}
     tid = payload.get("transaction_id") or payload.get("id") or payload.get("txid")
-    st = payload.get("status") or payload.get("state") or payload.get("payment_status")
-    if tid and st and str(st).lower() in ("paid", "pago", "success", "confirmed"):
-        order = db.orders.find_one_and_update({"transaction_id": str(tid)}, {"$set": {"status": "paid", "paid_at": datetime.utcnow(), "webhook_last": payload, "webhook_verified": verified}}, return_document=ReturnDocument.AFTER)
-        if order:
+    st = (payload.get("status") or payload.get("state") or payload.get("payment_status") or "").lower()
+    if tid and st in ("paid", "pago", "success", "confirmed"):
+        ok_to_mark = verified
+        if not ok_to_mark:
             try:
-                activate_user_plan(order["user_id"], order["plan"])
+                pp = consult_pp(tid)
+                st2 = str(pp.get("status", "")).lower()
+                if st2 in ("paid", "pago", "success", "confirmed"):
+                    ok_to_mark = True
             except Exception:
-                pass
+                ok_to_mark = False
+        if ok_to_mark:
+            order = db.orders.find_one_and_update({"transaction_id": str(tid)}, {"$set": {"status": "paid", "paid_at": datetime.utcnow(), "webhook_last": payload, "webhook_verified": verified}}, return_document=ReturnDocument.AFTER)
+            if order:
+                try:
+                    activate_user_plan(order["user_id"], order["plan"])
+                except Exception:
+                    pass
     return jsonify({"ok": True, "verified": verified})
 
 if __name__ == '__main__':
