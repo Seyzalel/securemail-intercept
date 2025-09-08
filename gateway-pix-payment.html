@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8"/>
@@ -62,7 +61,7 @@ header.app-header:hover{box-shadow:var(--shadow-lg);transform:translateY(-2px)}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(36,99,240,0.4)}70%{box-shadow:0 0 0 10px rgba(36,99,240,0)}100%{box-shadow:0 0 0 0 rgba(36,99,240,0)}}
 @media (prefers-reduced-motion:reduce){.pulse{animation:none!important}*{scroll-behavior:auto}}
 .focus-ring:focus-visible{outline:3px solid rgba(36,99,240,0.5);outline-offset:2px}
-.plan-summary{background:linear-gradient(180deg,rgba(255,255,255,0.8),rgba(251,253,255,0.72));border:1px solid rgba(0,0,0,0.06);border-radius:14px;padding:14px;display:grid;gap:10px;margin-top:14px}
+.plan-summary{background:linear-gradient(180deg,rgba(255,255,255,0.8),rgba(251,253,255,0.72));border:1px solid rgba(0,0,0,0.06);border-radius:14px;padding:14px;display:grid;gap:10px;margin-top:0}
 .kv{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .kv div{background:rgba(255,255,255,0.75);border:1px solid rgba(0,0,0,0.04);border-radius:12px;padding:10px}
 .kv b{display:block;color:#0f172a;font-size:.86rem;margin-bottom:4px}
@@ -116,30 +115,6 @@ header.app-header:hover{box-shadow:var(--shadow-lg);transform:translateY(-2px)}
   </div>
 
   <section class="pay-card" aria-labelledby="payTitle">
-    <div class="meta-row">
-      <div class="pill"><iconify-icon icon="ph:lightning-bold" width="16" height="16"></iconify-icon>Pix copia e cola • QR Code</div>
-      <div class="timer" id="timer" role="status" aria-live="polite" aria-atomic="true"><iconify-icon icon="mdi:timer-outline" width="18" height="18"></iconify-icon><span id="timerText">10:00</span></div>
-    </div>
-
-<div class="pay-grid">
-  <div class="qr-pane">
-    <div class="qr-card">
-      <img id="qrImage" class="qr-img" alt="QR Code do Pix" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='320' height='320' viewBox='0 0 200 200'><rect width='200' height='200' fill='%23ffffff'/><rect x='10' y='10' width='60' height='60' fill='none' stroke='%23000' stroke-width='10'/><rect x='25' y='25' width='30' height='30' fill='%23000'/><rect x='130' y='10' width='60' height='60' fill='none' stroke='%23000' stroke-width='10'/><rect x='145' y='25' width='30' height='30' fill='%23000'/><rect x='10' y='130' width='60' height='60' fill='none' stroke='%23000' stroke-width='10'/><rect x='25' y='145' width='30' height='30' fill='%23000'/><rect x='90' y='10' width='20' height='20' fill='%23000'/><rect x='90' y='40' width='20' height='20' fill='%23000'/><rect x='90' y='70' width='20' height='20' fill='%23000'/><rect x='120' y='90' width='20' height='20' fill='%23000'/><rect x='60' y='90' width='20' height='20' fill='%23000'/><rect x='40' y='110' width='20' height='20' fill='%23000'/><rect x='90' y='120' width='20' height='20' fill='%23000'/><rect x='120' y='120' width='20' height='20' fill='%23000'/><rect x='150' y='90' width='20' height='20' fill='%23000'/><rect x='150' y='120' width='20' height='20' fill='%23000'/><rect x='120' y='60' width='20' height='20' fill='%23000'/><rect x='60' y='150' width='20' height='20' fill='%23000'/><rect x='90' y='150' width='20' height='20' fill='%23000'/><rect x='120' y='150' width='20' height='20' fill='%23000'/></svg>"/>
-    </div>
-    <button class="copy-btn focus-ring pulse" id="copyBtn"><iconify-icon icon="lucide:copy" width="18" height="18"></iconify-icon>Copiar código Pix</button>
-  </div>
-
-  <div>
-    <h2 id="payTitle" class="sr-only">Detalhes do pagamento Pix</h2>
-    <div class="field">
-      <label class="label" for="pixCode"><span class="inline-icon"><iconify-icon icon="lucide:code" width="16" height="16"></iconify-icon></span>Código Pix (copia e cola)</label>
-      <textarea id="pixCode" class="code-input focus-ring" rows="6" readonly spellcheck="false" aria-describedby="copyHelp"></textarea>
-      <small id="copyHelp" style="color:var(--muted)">Cole este código no seu banco na opção Pix copia e cola.</small>
-    </div>
-    <div class="instructions" aria-live="polite">
-      <p><span class="inline-icon"><iconify-icon icon="lucide:clipboard-check" width="18" height="18"></iconify-icon></span><span>Copie o código Pix, abra o aplicativo do seu banco, vá na opção Pix copia e cola, cole o código e finalize o pagamento.</span></p>
-      <p><span class="inline-icon"><iconify-icon icon="lucide:scan-line" width="18" height="18"></iconify-icon></span><span>Ou, se preferir, escaneie o QR Code ao lado diretamente no aplicativo do seu banco.</span></p>
-    </div>
     <div class="plan-summary">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
         <div style="font-weight:800;color:#0f172a" id="planName">Plano</div>
@@ -153,14 +128,40 @@ header.app-header:hover{box-shadow:var(--shadow-lg);transform:translateY(-2px)}
         <div><b>Suporte</b><span id="planSupport">—</span></div>
         <div><b>Status</b><span id="payStatus">Pendente</span></div>
       </div>
+      <div class="kv">
+        <div style="grid-column:1/3"><b>ID da transação</b><span id="txId">—</span></div>
+      </div>
     </div>
-  </div>
-</div>
 
+    <div class="meta-row">
+      <div class="pill"><iconify-icon icon="ph:lightning-bold" width="16" height="16"></iconify-icon>Pix copia e cola • QR Code</div>
+      <div class="timer" id="timer" role="status" aria-live="polite" aria-atomic="true"><iconify-icon icon="mdi:timer-outline" width="18" height="18"></iconify-icon><span id="timerText">10:00</span></div>
+    </div>
+
+    <div class="pay-grid">
+      <div class="qr-pane">
+        <div class="qr-card">
+          <img id="qrImage" class="qr-img" alt="QR Code do Pix" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='320' height='320' viewBox='0 0 200 200'><rect width='200' height='200' fill='%23ffffff'/><rect x='10' y='10' width='60' height='60' fill='none' stroke='%23000' stroke-width='10'/><rect x='25' y='25' width='30' height='30' fill='%23000'/><rect x='130' y='10' width='60' height='60' fill='none' stroke='%23000' stroke-width='10'/><rect x='145' y='25' width='30' height='30' fill='%23000'/><rect x='10' y='130' width='60' height='60' fill='none' stroke='%23000' stroke-width='10'/><rect x='25' y='145' width='30' height='30' fill='%23000'/><rect x='90' y='10' width='20' height='20' fill='%23000'/><rect x='90' y='40' width='20' height='20' fill='%23000'/><rect x='90' y='70' width='20' height='20' fill='%23000'/><rect x='120' y='90' width='20' height='20' fill='%23000'/><rect x='60' y='90' width='20' height='20' fill='%23000'/><rect x='40' y='110' width='20' height='20' fill='%23000'/><rect x='90' y='120' width='20' height='20' fill='%23000'/><rect x='120' y='120' width='20' height='20' fill='%23000'/><rect x='150' y='90' width='20' height='20' fill='%23000'/><rect x='150' y='120' width='20' height='20' fill='%23000'/><rect x='120' y='60' width='20' height='20' fill='%23000'/><rect x='60' y='150' width='20' height='20' fill='%23000'/><rect x='90' y='150' width='20' height='20' fill='%23000'/><rect x='120' y='150' width='20' height='20' fill='%23000'/></svg>"/>
+        </div>
+        <button class="copy-btn focus-ring pulse" id="copyBtn"><iconify-icon icon="lucide:copy" width="18" height="18"></iconify-icon>Copiar código Pix</button>
+      </div>
+
+      <div>
+        <h2 id="payTitle" class="sr-only">Detalhes do pagamento Pix</h2>
+        <div class="field">
+          <label class="label" for="pixCode"><span class="inline-icon"><iconify-icon icon="lucide:code" width="16" height="16"></iconify-icon></span>Código Pix (copia e cola)</label>
+          <textarea id="pixCode" class="code-input focus-ring" rows="6" readonly spellcheck="false" aria-describedby="copyHelp"></textarea>
+          <small id="copyHelp" style="color:var(--muted)">Cole este código no seu banco na opção Pix copia e cola.</small>
+        </div>
+        <div class="instructions" aria-live="polite">
+          <p><span class="inline-icon"><iconify-icon icon="lucide:clipboard-check" width="18" height="18"></iconify-icon></span><span>Copie o código Pix, abra o aplicativo do seu banco, vá na opção Pix copia e cola, cole o código e finalize o pagamento.</span></p>
+          <p><span class="inline-icon"><iconify-icon icon="lucide:scan-line" width="18" height="18"></iconify-icon></span><span>Ou, se preferir, escaneie o QR Code ao lado diretamente no aplicativo do seu banco.</span></p>
+        </div>
+      </div>
+    </div>
   </section>
 
-<span class="sr-only" id="srStatus" role="status" aria-live="polite"></span>
-
+  <span class="sr-only" id="srStatus" role="status" aria-live="polite"></span>
 </main>
 
 <script>
@@ -169,13 +170,12 @@ function announce(m){srStatus.textContent=m}
 function qs(k){var u=new URLSearchParams(location.search);return u.get(k)}
 function anyTid(){return qs('tid')||qs('tx')||qs('id')||qs('txid')}
 function toast(msg){var t=document.createElement('div');t.className='toast';t.textContent=msg;document.body.appendChild(t);requestAnimationFrame(function(){t.classList.add('show')});setTimeout(function(){t.classList.remove('show');setTimeout(function(){t.remove()},200)},2200)}
-var timerEl=document.getElementById('timer'),timerText=document.getElementById('timerText');var copyBtn=document.getElementById('copyBtn');var pixCodeEl=document.getElementById('pixCode');var qrImage=document.getElementById('qrImage');var planName=document.getElementById('planName');var planPrice=document.getElementById('planPrice');var planPeriod=document.getElementById('planPeriod');var planLimit=document.getElementById('planLimit');var planSupport=document.getElementById('planSupport');var payStatusEl=document.getElementById('payStatus');var deadlineText=document.getElementById('deadlineText');var PIX_PAYLOAD='';var TID=anyTid();var remaining=600;var expired=false;function fmt(s){var m=String(Math.floor(s/60)).padStart(2,'0');var ss=String(s%60).padStart(2,'0');return m+':'+ss}
-async function getInfo(){var u=TID?('/api/pay/info?tid='+encodeURIComponent(TID)):'/api/pay/info';var r=await fetch(u,{credentials:'include'});if(!r.ok){var payload=qs('payload');var qr=qs('qr');if(payload){PIX_PAYLOAD=payload;pixCodeEl.value=PIX_PAYLOAD}if(qr){qrImage.setAttribute('src',qr)}return}var data=await r.json();if(!data||data.ok===false){return}if(data.plan){planName.textContent=data.plan.name||'Plano';planPrice.textContent=data.plan.price_display||'—';planPeriod.textContent=data.plan.period||'—';planLimit.textContent=(data.plan.limit_per_day||'—');planSupport.textContent=data.plan.support||'WhatsApp'}if(data.deadline_seconds!=null){remaining=Math.max(0,parseInt(data.deadline_seconds,10));deadlineText.textContent=(Math.floor(remaining/60)||0)+' minutos'}if(data.status){payStatusEl.textContent=(String(data.status).toLowerCase()==='paid'?'Pago':'Pendente')}if(data.pix_payload){PIX_PAYLOAD=data.pix_payload;pixCodeEl.value=PIX_PAYLOAD}if(data.qr_png_base64){qrImage.setAttribute('src','data:image/png;base64,'+data.qr_png_base64)}else if(data.qr_url){qrImage.setAttribute('src',data.qr_url)}else if(TID){fetch('/api/pix/qr/'+encodeURIComponent(TID),{credentials:'include'}).then(function(r){if(r.ok)return r.blob()}).then(function(b){if(b){var o=URL.createObjectURL(b);qrImage.setAttribute('src',o)}}).catch(function(){})}}
+var timerEl=document.getElementById('timer'),timerText=document.getElementById('timerText');var copyBtn=document.getElementById('copyBtn');var pixCodeEl=document.getElementById('pixCode');var qrImage=document.getElementById('qrImage');var planName=document.getElementById('planName');var planPrice=document.getElementById('planPrice');var planPeriod=document.getElementById('planPeriod');var planLimit=document.getElementById('planLimit');var planSupport=document.getElementById('planSupport');var payStatusEl=document.getElementById('payStatus');var deadlineText=document.getElementById('deadlineText');var txIdEl=document.getElementById('txId');var PIX_PAYLOAD='';var TID=anyTid();var remaining=600;var expired=false;function fmt(s){var m=String(Math.floor(s/60)).padStart(2,'0');var ss=String(s%60).padStart(2,'0');return m+':'+ss}
+async function getInfo(){var u=TID?('/api/pay/info?tid='+encodeURIComponent(TID)):'/api/pay/info';var r=await fetch(u,{credentials:'include'});if(!r.ok){var payload=qs('payload');var qr=qs('qr');if(payload){PIX_PAYLOAD=payload;pixCodeEl.value=PIX_PAYLOAD}if(qr){qrImage.setAttribute('src',qr)}if(TID){txIdEl.textContent=TID}return}var data=await r.json();if(!data||data.ok===false){if(TID){txIdEl.textContent=TID}return}if(data.plan){planName.textContent=data.plan.name||'Plano';planPrice.textContent=data.plan.price_display||'—';planPeriod.textContent=data.plan.period||'—';planLimit.textContent=(data.plan.limit_per_day||'—');planSupport.textContent=data.plan.support||'WhatsApp'}if(data.deadline_seconds!=null){remaining=Math.max(0,parseInt(data.deadline_seconds,10));deadlineText.textContent=(Math.floor(remaining/60)||0)+' minutos'}if(data.status){payStatusEl.textContent=(String(data.status).toLowerCase()==='paid'?'Pago':'Pendente')}if(data.transaction_id){txIdEl.textContent=data.transaction_id}else if(TID){txIdEl.textContent=TID}if(data.pix_payload){PIX_PAYLOAD=data.pix_payload;pixCodeEl.value=PIX_PAYLOAD}if(data.qr_png_base64){qrImage.setAttribute('src','data:image/png;base64,'+data.qr_png_base64)}else if(data.qr_url){qrImage.setAttribute('src',data.qr_url)}else if(TID){fetch('/api/pix/qr/'+encodeURIComponent(TID),{credentials:'include'}).then(function(r){if(r.ok)return r.blob()}).then(function(b){if(b){var o=URL.createObjectURL(b);qrImage.setAttribute('src',o)}}).catch(function(){})}}
 async function poll(){if(expired)return;var u=TID?('/api/pay/status?tid='+encodeURIComponent(TID)):(null);if(!u&&qs('txid')){u='/check/'+encodeURIComponent(qs('txid'))}if(!u&&TID){u='/check/'+encodeURIComponent(TID)}if(!u)return;try{var r=await fetch(u,{credentials:'include'});if(!r.ok)return;var j=await r.json();var st=j.status||j.state||j.payment_status;var s=st?String(st).toLowerCase():null;if(s==='paid'||s==='pago'||s==='success'||s==='confirmed'){payStatusEl.textContent='Pago';toast('Pagamento identificado');setTimeout(function(){location.href='/dashboard'},900)}}catch(e){}}
 function tick(){if(remaining<=0){if(!expired){expired=true;timerText.textContent='00:00';timerEl.classList.add('expired');copyBtn.setAttribute('disabled','true');announce('O código Pix expirou. Gere um novo pedido se necessário.')}}else{remaining-=1;timerText.textContent=fmt(remaining)}}
 copyBtn.addEventListener('click',async function(){try{if(!PIX_PAYLOAD||copyBtn.disabled)return;if(navigator.clipboard&&navigator.clipboard.writeText){await navigator.clipboard.writeText(PIX_PAYLOAD)}else{pixCodeEl.focus();pixCodeEl.select();document.execCommand('copy');window.getSelection().removeAllRanges()}announce('Código Pix copiado com sucesso.')}catch(e){announce('Não foi possível copiar automaticamente. Selecione e copie manualmente.')}});
 document.addEventListener('DOMContentLoaded',function(){getInfo().then(function(){timerText.textContent=fmt(remaining)});setInterval(tick,1000);setInterval(poll,3000)})
 </script>
-
 </body>
 </html>
