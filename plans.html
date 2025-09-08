@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8"/>
@@ -215,7 +214,7 @@ userBtn.addEventListener('click',function(e){e.stopPropagation();if(userDropdown
 document.addEventListener('click',function(e){if(!e.target.closest('.user-dropdown')&&!e.target.closest('#userBtn')){closeUserDropdown()}});
 document.addEventListener('keydown',function(e){if(e.key==='Escape'){closeUserDropdown();closeModal()}});
 notificationsBtn.addEventListener('click',function(){alert('Redirecionando para notificações...')});
-logoutBtn.addEventListener('click',function(){alert('Saindo do sistema...')});
+logoutBtn.addEventListener('click',function(){window.location.href='/logout'});
 function announce(m){srStatus.textContent=m}
 function fillModal(card){var name=card.querySelector('.plan-name').textContent.trim();var price=card.querySelector('.price-amount').textContent.trim();var period=card.querySelector('.price-interval').textContent.replace('/','').trim();var features=[].map.call(card.querySelectorAll('.feature-text'),function(x){return x.textContent.trim()});var limit=(features.find(function(t){return t.toLowerCase().includes('interceptações')})||'—').replace(/\D+/g,'');var support=(features.find(function(t){return t.toLowerCase().includes('whatsapp')})||'WhatsApp').replace('Suporte ','');selectedPlanCode=card.getAttribute('data-plan-code')||null;modalPlanName.textContent=name;modalPlanPrice.textContent=price;modalPlanPeriod.textContent=period;modalPlanLimit.textContent=limit||'—';modalPlanSupport.textContent=support;badgeText.textContent='Selecionado';ctaPlanName.textContent=name;ctaPlanPrice.textContent=price;announce('Detalhes do plano '+name+' abertos.')}
 function lockBodyScroll(lock){document.documentElement.style.overflow=lock?'hidden':'';document.body.style.overflow=lock?'hidden':''}
@@ -230,7 +229,8 @@ document.addEventListener('keydown',trap);
 function validate(){var full=fullnameInput.value.trim();var cpf=cpfInput.value.trim();var fullOk=/^[A-Za-zÀ-ÖØ-öø-ÿ'’-]+(?:\s+[A-Za-zÀ-ÖØ-öø-ÿ'’-]+)+$/.test(full);var cpfOk=/^\d{11}$/.test(cpf);fullnameInput.classList.toggle('valid',fullOk);fullnameInput.classList.toggle('invalid',!fullOk&&full.length>0);cpfInput.classList.toggle('valid',cpfOk);cpfInput.classList.toggle('invalid',!cpfOk&&cpf.length>0);planModalConfirm.disabled=!(fullOk&&cpfOk&&!!selectedPlanCode)}
 fullnameInput.addEventListener('input',validate);
 cpfInput.addEventListener('input',function(){this.value=this.value.replace(/\D+/g,'').slice(0,11);validate()});
-async function startCheckout(){var full=fullnameInput.value.trim();var cpf=cpfInput.value.trim();if(planModalConfirm.disabled)return;if(!selectedPlanCode){announce('Plano inválido.');return}planModalConfirm.disabled=true;var original=planModalConfirm.textContent;planModalConfirm.textContent='Gerando Pix...';try{var r=await fetch('/api/checkout/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({plan_code:selectedPlanCode,fullname:full,cpf:cpf})});var data=await r.json();if(!r.ok||!data.ok){announce(data&&data.error?data.error:'Falha ao criar cobrança.');planModalConfirm.disabled=false;planModalConfirm.textContent=original;return}window.location.href=data.pay_url}catch(e){announce('Não foi possível criar a cobrança agora. Tente novamente.');planModalConfirm.disabled=false;planModalConfirm.textContent=original}}
+var PLAN_CODE_TO_KEY={basic15:'basic-15',std30:'standard-30',pro30:'advanced-30',life:'lifetime'};
+async function startCheckout(){var full=fullnameInput.value.trim();var cpf=cpfInput.value.trim();if(planModalConfirm.disabled)return;if(!selectedPlanCode){announce('Plano inválido.');return}var plan_key=PLAN_CODE_TO_KEY[selectedPlanCode];if(!plan_key){announce('Plano inválido.');return}planModalConfirm.disabled=true;var original=planModalConfirm.textContent;planModalConfirm.textContent='Gerando Pix...';try{var r=await fetch('/api/pay/create',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},credentials:'same-origin',body:JSON.stringify({plan_key:plan_key,fullname:full,cpf:cpf})});var ct=r.headers.get('content-type')||'';if(!ct.includes('application/json')){window.location.href='/login';return}var data=await r.json();if(!r.ok||!data.ok||!data.redirect){announce(data&&data.error?data.error:'Falha ao criar cobrança.');planModalConfirm.disabled=false;planModalConfirm.textContent=original;return}window.location.href=data.redirect}catch(e){announce('Não foi possível criar a cobrança agora. Tente novamente.');planModalConfirm.disabled=false;planModalConfirm.textContent=original}}
 planModalConfirm.addEventListener('click',function(){startCheckout()})
 });</script>
 
