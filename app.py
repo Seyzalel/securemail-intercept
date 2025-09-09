@@ -6,6 +6,8 @@ import base64
 import hmac
 import hashlib
 import logging
+import string
+import secrets
 from datetime import datetime, timedelta, timezone
 from urllib.parse import quote_plus
 from functools import wraps
@@ -35,6 +37,7 @@ db.users.create_index([('username_lower', ASCENDING)], unique=True)
 db.users.create_index([('email_lower', ASCENDING)], unique=True)
 db.orders.create_index([('transaction_id', ASCENDING)], unique=True)
 db.orders.create_index([('user_id', ASCENDING), ('created_at', ASCENDING)])
+db.usage.create_index([('user_id', ASCENDING), ('date', ASCENDING)], unique=True)
 
 PUSHINPAY_TOKEN = "45911|0CnwU402QB1Zw1w15Lf69cDyQZtPd0RovG2TLjgQce6b6af1"
 PUSHINPAY_BASE_URL = "https://api.pushinpay.com.br"
@@ -49,6 +52,11 @@ PLANS = {
 }
 
 NAME_TO_KEY = {v["name"].lower(): k for k, v in PLANS.items()}
+
+ALPHABET = string.ascii_uppercase + string.digits
+
+def new_user_id(k=12):
+    return ''.join(secrets.choice(ALPHABET) for _ in range(k))
 
 def is_email(v):
     return re.match(r'^[^\s@]+@[^\s@]+\.[^\s@]+$', v or '') is not None
@@ -171,6 +179,12 @@ def plan_by_key_or_name(plan_key=None, plan_name=None):
         return PLANS[NAME_TO_KEY[plan_name.lower()]]
     return None
 
+def is_plan_active(plan):
+    if not plan:
+        return False
+    exp = plan.get("expires_at")
+    return exp is None or datetime.utcnow() < exp
+
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'GET':
@@ -193,11 +207,21 @@ def register():
     existing = db.users.find_one({'$or': [{'username_lower': username.lower()}, {'email_lower': email.lower()}]})
     if existing:
         return jsonify({'ok': False, 'error': 'Usuário ou e-mail já cadastrado.'}), 409
-    try:
-        user = {'_id': str(os.urandom(12).hex()), 'username': username, 'username_lower': username.lower(), 'email': email, 'email_lower': email.lower(), 'password_hash': generate_password_hash(password), 'created_at': datetime.utcnow(), 'last_login_at': None}
-        db.users.insert_one(user)
-    except DuplicateKeyError:
-        return jsonify({'ok': False, 'error': 'Usuário ou e-mail já cadastrado.'}), 409
+    attempts = 0
+    while True:
+        attempts += 1
+        uid = new_user_id(12)
+        user = {'_id': uid, 'username': username, 'username_lower': username.lower(), 'email': email, 'email_lower': email.lower(), 'password_hash': generate_password_hash(password), 'created_at': datetime.utcnow(), 'last_login_at': None}
+        try:
+            db.users.insert_one(user)
+            break
+        except DuplicateKeyError:
+            race = db.users.find_one({'$or': [{'username_lower': username.lower()}, {'email_lower': email.lower()}]})
+            if race:
+                return jsonify({'ok': False, 'error': 'Usuário ou e-mail já cadastrado.'}), 409
+            if attempts < 5:
+                continue
+            return jsonify({'ok': False, 'error': 'Falha ao gerar ID. Tente novamente.'}), 500
     session.clear()
     session['user_id'] = user['_id']
     session['username'] = username
@@ -253,6 +277,58 @@ def plans():
 @login_required
 def gateway_pix_payment():
     return render_template('gateway-pix-payment.html')
+
+@app.route('/api/me', methods=['GET'])
+@login_required
+def api_me():
+    user = get_user()
+    plan = user.get('plan') if user else None
+    active = is_plan_active(plan) if plan else False
+    today = datetime.utcnow().date().isoformat()
+    usage = db.usage.find_one({'user_id': user['_id'], 'date': today}) if user else None
+    used = usage.get('count', 0) if usage else 0
+    expires = plan.get('expires_at').isoformat() if plan and plan.get('expires_at') else None
+    return jsonify({
+        'ok': True,
+        'user': {'id': user['_id'], 'username': user['username']},
+        'plan': {
+            'active': active,
+            'key': plan.get('key') if plan else None,
+            'name': plan.get('name') if plan else None,
+            'limit_per_day': plan.get('limit_per_day') if plan else 0,
+            'expires_at': expires
+        },
+        'usage_today': {'used': used, 'date': today}
+    })
+
+@app.route('/api/feature/use', methods=['POST'])
+@login_required
+def feature_use():
+    user = get_user()
+    plan = user.get('plan') if user else None
+    if not is_plan_active(plan):
+        return jsonify({'ok': False, 'error': 'Plano inativo. Atualize seu plano para usar as funcionalidades.'}), 403
+    limit = int(plan.get('limit_per_day') or 0)
+    if limit <= 0:
+        return jsonify({'ok': False, 'error': 'Seu plano não permite uso. Atualize seu plano.'}), 403
+    today = datetime.utcnow().date().isoformat()
+    db.usage.find_one_and_update(
+        {'user_id': user['_id'], 'date': today},
+        {'$setOnInsert': {'user_id': user['_id'], 'date': today, 'count': 0}},
+        upsert=True,
+        return_document=ReturnDocument.AFTER
+    )
+    updated = db.usage.find_one_and_update(
+        {'user_id': user['_id'], 'date': today, 'count': {'$lt': limit}},
+        {'$inc': {'count': 1}},
+        return_document=ReturnDocument.AFTER
+    )
+    if updated is None:
+        doc = db.usage.find_one({'user_id': user['_id'], 'date': today}) or {'count': limit}
+        return jsonify({'ok': False, 'error': 'Limite diário atingido.', 'used': doc.get('count', limit), 'limit': limit}), 429
+    used = updated.get('count', 0)
+    remaining = max(0, limit - used)
+    return jsonify({'ok': True, 'used': used, 'remaining': remaining, 'limit': limit})
 
 @app.route('/api/pay/create', methods=['POST'])
 @login_required
