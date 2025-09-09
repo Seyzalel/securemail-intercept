@@ -16,8 +16,9 @@ import requests
 import qrcode
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, send_file, abort
 from werkzeug.security import generate_password_hash, check_password_hash
-from pymongo import MongoClient, ASCENDING, ReturnDocument
+from pymongo import MongoClient, ASCENDING, DESCENDING, ReturnDocument
 from pymongo.errors import DuplicateKeyError
+from admin import admin_bp
 
 app = Flask(__name__, template_folder='.')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'qvF@9mG#7rKpX3Z!eA6Lw2Y^uJh5NbTdCxMzVb1RsEpQgUoIiHtKk+0P*sDfWnEl')
@@ -35,11 +36,13 @@ client = MongoClient(MONGO_URI)
 db = client['securemail']
 db.users.create_index([('username_lower', ASCENDING)], unique=True)
 db.users.create_index([('email_lower', ASCENDING)], unique=True)
+db.users.create_index([('admin', ASCENDING)])
 db.orders.create_index([('transaction_id', ASCENDING)], unique=True)
 db.orders.create_index([('user_id', ASCENDING), ('created_at', ASCENDING)])
+db.orders.create_index([('status', ASCENDING), ('paid_at', ASCENDING)])
 db.usage.create_index([('user_id', ASCENDING), ('date', ASCENDING)], unique=True)
 
-PUSHINPAY_TOKEN = "45911|0CnwU402QB1Zw1w15Lf69cDyQZtPd0RovG2TLjgQce6b6af1"
+PUSHINPAY_TOKEN = os.environ.get("PUSHINPAY_TOKEN", "45911|0CnwU402QB1Zw1w15Lf69cDyQZtPd0RovG2TLjgQce6b6af1")
 PUSHINPAY_BASE_URL = "https://api.pushinpay.com.br"
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
 HEADERS_PP = {"Authorization": f"Bearer {PUSHINPAY_TOKEN}", "Accept": "application/json", "Content-Type": "application/json"}
@@ -88,104 +91,6 @@ def plan_key_from_code(code):
 
 def plan_code_from_key(key):
     return CODE_BY_KEY.get(key, 0)
-
-def login_required(f):
-    @wraps(f)
-    def _wrap(*args, **kwargs):
-        if 'user_id' not in session:
-            return redirect(url_for('login'))
-        return f(*args, **kwargs)
-    return _wrap
-
-@app.after_request
-def secure_headers(resp):
-    resp.headers['X-Content-Type-Options'] = 'nosniff'
-    resp.headers['X-Frame-Options'] = 'DENY'
-    resp.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
-    resp.headers['Permissions-Policy'] = 'geolocation=(), microphone=(), camera=()'
-    return resp
-
-def create_pix_pushinpay(value_cents, webhook_url=None, reference=None):
-    url = f"{PUSHINPAY_BASE_URL}/api/pix/cashIn"
-    body = {"value": int(value_cents)}
-    if webhook_url:
-        body["webhook_url"] = webhook_url
-    if reference:
-        body["reference"] = reference
-    r = requests.post(url, headers=HEADERS_PP, json=body, timeout=15)
-    r.raise_for_status()
-    return r.json()
-
-def consult_pp(transaction_id):
-    url = f"{PUSHINPAY_BASE_URL}/api/transactions/{transaction_id}"
-    r = requests.get(url, headers=HEADERS_PP, timeout=10)
-    r.raise_for_status()
-    return r.json()
-
-def qr_png_from_payload(payload_text):
-    qr = qrcode.QRCode(box_size=8, border=2)
-    qr.add_data(payload_text)
-    qr.make(fit=True)
-    img = qr.make_image()
-    bio = io.BytesIO()
-    img.save(bio, format="PNG")
-    bio.seek(0)
-    return bio
-
-def parse_pp_response(resp):
-    pix_payload = None
-    qr_b64 = None
-    tid = None
-    if isinstance(resp, dict):
-        for k in ("qr_code", "payload", "pix", "copiacolapix", "pix_string"):
-            if k in resp and resp[k]:
-                pix_payload = str(resp[k])
-                break
-        for k in ("id", "transaction_id", "txid"):
-            if k in resp and resp[k]:
-                tid = str(resp[k])
-                break
-        if not pix_payload:
-            for k in ("qr_code_base64", "qr_base64", "qrcode_base64"):
-                if k in resp and resp[k]:
-                    qr_b64 = str(resp[k])
-                    break
-    if pix_payload:
-        img = qr_png_from_payload(pix_payload).getvalue()
-        qr_b64 = base64.b64encode(img).decode("utf-8")
-    return pix_payload, qr_b64, tid
-
-def order_deadline_secs(created_at):
-    exp = created_at + timedelta(minutes=10)
-    now = datetime.utcnow()
-    return max(0, int((exp - now).total_seconds()))
-
-def set_user_plan_code(user_id, code):
-    now = datetime.utcnow()
-    key = plan_key_from_code(code)
-    info = PLANS.get(key) if key else None
-    expires_at = None
-    if info and not info["lifetime"]:
-        expires_at = now + timedelta(days=info["duration_days"])
-    update = {}
-    if info:
-        update["plan"] = {
-            "key": info["key"],
-            "name": info["name"],
-            "activated_at": now,
-            "expires_at": expires_at,
-            "limit_per_day": info["limit_per_day"],
-            "support": info["support"],
-            "period": info["period"],
-        }
-    else:
-        update["plan"] = None
-    update["plan_code"] = int(code or 0)
-    db.users.update_one({"_id": user_id}, {"$set": update})
-
-def activate_user_plan(user_id, plan):
-    code = plan_code_from_key(plan["key"]) if plan else 0
-    set_user_plan_code(user_id, code)
 
 def safe_user_id():
     return session.get("user_id")
@@ -240,6 +145,123 @@ def get_effective_plan_info(user):
     info = PLANS.get(key) if key else None
     return info, plan
 
+def create_pix_pushinpay(value_cents, webhook_url=None, reference=None):
+    url = f"{PUSHINPAY_BASE_URL}/api/pix/cashIn"
+    body = {"value": int(value_cents)}
+    if webhook_url:
+        body["webhook_url"] = webhook_url
+    if reference:
+        body["reference"] = reference
+    r = requests.post(url, headers=HEADERS_PP, json=body, timeout=15)
+    r.raise_for_status()
+    return r.json()
+
+def consult_pp(transaction_id):
+    url = f"{PUSHINPAY_BASE_URL}/api/transactions/{transaction_id}"
+    r = requests.get(url, headers=HEADERS_PP, timeout=10)
+    r.raise_for_status()
+    return r.json()
+
+def qr_png_from_payload(payload_text):
+    qr = qrcode.QRCode(box_size=8, border=2)
+    qr.add_data(payload_text)
+    qr.make(fit=True)
+    img = qr.make_image()
+    bio = io.BytesIO()
+    img.save(bio, format="PNG")
+    bio.seek(0)
+    return bio
+
+def parse_pp_response(resp):
+    pix_payload = None
+    qr_b64 = None
+    tid = None
+    if isinstance(resp, dict):
+        for k in ("qr_code", "payload", "pix", "copiacolapix", "pix_string"):
+            if k in resp and resp[k]:
+                pix_payload = str(resp[k])
+                break
+        for k in ("id", "transaction_id", "txid"):
+            if k in resp and resp[k]:
+                tid = str(resp[k])
+                break
+        if not pix_payload:
+            for k in ("qr_code_base64", "qr_base64", "qrcode_base64"):
+                if k in resp and resp[k]:
+                    qr_b64 = str(resp[k])
+                    break
+    if pix_payload:
+        img = qr_png_from_payload(pix_payload).getvalue()
+        qr_b64 = base64.b64encode(img).decode("utf-8")
+    return pix_payload, qr_b64, tid
+
+def set_user_plan_code(user_id, code):
+    now = datetime.utcnow()
+    key = plan_key_from_code(code)
+    info = PLANS.get(key) if key else None
+    expires_at = None
+    if info and not info["lifetime"]:
+        expires_at = now + timedelta(days=info["duration_days"])
+    update = {}
+    if info:
+        update["plan"] = {
+            "key": info["key"],
+            "name": info["name"],
+            "activated_at": now,
+            "expires_at": expires_at,
+            "limit_per_day": info["limit_per_day"],
+            "support": info["support"],
+            "period": info["period"],
+        }
+    else:
+        update["plan"] = None
+    update["plan_code"] = int(code or 0)
+    db.users.update_one({"_id": user_id}, {"$set": update})
+
+def activate_user_plan(user_id, plan):
+    code = plan_code_from_key(plan["key"]) if plan else 0
+    set_user_plan_code(user_id, code)
+
+def login_required(f):
+    @wraps(f)
+    def _wrap(*args, **kwargs):
+        uid = session.get('user_id')
+        if not uid:
+            return redirect(url_for('login'))
+        u = db.users.find_one({"_id": uid})
+        if not u:
+            session.clear()
+            return redirect(url_for('login'))
+        if u.get("suspended"):
+            session.clear()
+            return abort(403)
+        sv_db = int(u.get("session_version") or 0)
+        sv_sess = int(session.get("sv") or 0)
+        revoked_at = u.get("session_revoked_at")
+        sst = session.get("sst")
+        if sv_db > sv_sess:
+            session.clear()
+            return redirect(url_for('login'))
+        if revoked_at and sst:
+            try:
+                sst_dt = datetime.fromisoformat(sst)
+                if revoked_at > sst_dt:
+                    session.clear()
+                    return redirect(url_for('login'))
+            except Exception:
+                session.clear()
+                return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return _wrap
+
+@app.after_request
+def secure_headers(resp):
+    resp.headers['X-Content-Type-Options'] = 'nosniff'
+    resp.headers['X-Frame-Options'] = 'DENY'
+    resp.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    resp.headers['Permissions-Policy'] = 'geolocation=(), microphone=(), camera=()'
+    return resp
+
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'GET':
@@ -266,7 +288,7 @@ def register():
     while True:
         attempts += 1
         uid = new_user_id(12)
-        user = {'_id': uid, 'username': username, 'username_lower': username.lower(), 'email': email, 'email_lower': email.lower(), 'password_hash': generate_password_hash(password), 'created_at': datetime.utcnow(), 'last_login_at': None, 'plan_code': 0, 'plan': None}
+        user = {'_id': uid, 'username': username, 'username_lower': username.lower(), 'email': email, 'email_lower': email.lower(), 'password_hash': generate_password_hash(password), 'created_at': datetime.utcnow(), 'last_login_at': None, 'plan_code': 0, 'plan': None, 'admin': 'no', 'session_version': 0}
         try:
             db.users.insert_one(user)
             break
@@ -280,6 +302,8 @@ def register():
     session.clear()
     session['user_id'] = user['_id']
     session['username'] = username
+    session['sv'] = int(user.get("session_version") or 0)
+    session['sst'] = datetime.utcnow().isoformat()
     session.permanent = False
     return redirect(url_for('dashboard'))
 
@@ -303,6 +327,8 @@ def login():
     user = db.users.find_one(q)
     if not user:
         return jsonify({'ok': False, 'error': 'Credenciais inválidas.'}), 401
+    if user.get("suspended"):
+        return jsonify({'ok': False, 'error': 'Conta suspensa.'}), 403
     pwd_hash = user.get('password_hash')
     if not pwd_hash or not check_password_hash(pwd_hash, password):
         return jsonify({'ok': False, 'error': 'Credenciais inválidas.'}), 401
@@ -311,6 +337,8 @@ def login():
     session.clear()
     session['user_id'] = user['_id']
     session['username'] = user['username']
+    session['sv'] = int(user.get("session_version") or 0)
+    session['sst'] = datetime.utcnow().isoformat()
     session.permanent = bool(remember)
     return redirect(url_for('dashboard'))
 
@@ -339,18 +367,18 @@ def gateway_pix_payment():
 def api_me():
     user = get_user()
     user = ensure_plan_code(user)
-    info, plan_doc = get_effective_plan_info(user)
     active = is_user_plan_active(user)
     today = datetime.utcnow().date().isoformat()
     usage = db.usage.find_one({'user_id': user['_id'], 'date': today}) if user else None
     used = usage.get('count', 0) if usage else 0
+    info, plan_doc = get_effective_plan_info(user)
     expires = plan_doc.get('expires_at').isoformat() if plan_doc and plan_doc.get('expires_at') else None
     key = plan_doc.get('key') if plan_doc else (info['key'] if info else None)
     name = plan_doc.get('name') if plan_doc else (info['name'] if info else None)
     limit_per_day = plan_doc.get('limit_per_day') if plan_doc and plan_doc.get('limit_per_day') is not None else (info['limit_per_day'] if info else 0)
     return jsonify({
         'ok': True,
-        'user': {'id': user['_id'], 'username': user['username']},
+        'user': {'id': user['_id'], 'username': user['username'], 'admin': user.get('admin', 'no'), 'suspended': bool(user.get('suspended') or False)},
         'plan': {
             'active': active,
             'code': int(user.get('plan_code') or 0),
@@ -367,6 +395,8 @@ def api_me():
 def feature_use():
     user = get_user()
     user = ensure_plan_code(user)
+    if user.get("suspended"):
+        return jsonify({'ok': False, 'error': 'Conta suspensa.'}), 403
     if not is_user_plan_active(user):
         return jsonify({'ok': False, 'error': 'Plano inativo. Atualize seu plano para usar as funcionalidades.'}), 403
     info, plan_doc = get_effective_plan_info(user)
@@ -399,6 +429,9 @@ def feature_use():
 @app.route('/api/pay/create', methods=['POST'])
 @login_required
 def api_pay_create():
+    user = get_user()
+    if user.get("suspended"):
+        return jsonify({"ok": False, "error": "Conta suspensa."}), 403
     data = request.get_json(force=True, silent=True) or {}
     plan_key = data.get('plan_key')
     plan_name = data.get('plan_name')
@@ -446,7 +479,7 @@ def api_pay_create():
     try:
         db.orders.insert_one(order)
     except DuplicateKeyError:
-        pass
+        return jsonify({"ok": False, "error": "Transação já existente."}), 409
     return jsonify({"ok": True, "redirect": url_for('gateway_pix_payment', tid=tid)}), 201
 
 @app.route('/api/pay/info', methods=['GET'])
@@ -458,11 +491,11 @@ def api_pay_info():
     if tid:
         order = db.orders.find_one({"transaction_id": tid, "user_id": user_id})
     if not order:
-        order = db.orders.find_one({"user_id": user_id}, sort=[("created_at", -1)])
+        order = db.orders.find_one({"user_id": user_id}, sort=[("created_at", DESCENDING)])
     if not order:
         return jsonify({"ok": False, "error": "Pedido não encontrado."}), 404
     now = datetime.utcnow()
-    deadline_seconds = max(0, int((order["expires_at"] - now).total_seconds())) if order.get("expires_at") else 0
+    deadline_seconds = max(0, int((order.get("expires_at") - now).total_seconds())) if order.get("expires_at") else 0
     return jsonify({
         "ok": True,
         "plan": {
@@ -607,6 +640,8 @@ def pushinpay_webhook():
                 except Exception:
                     pass
     return jsonify({"ok": True, "verified": verified})
+
+app.register_blueprint(admin_bp)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
