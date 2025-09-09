@@ -53,6 +53,9 @@ PLANS = {
 
 NAME_TO_KEY = {v["name"].lower(): k for k, v in PLANS.items()}
 
+PLAN_CODES = {0: None, 1: "basic-15", 2: "standard-30", 3: "advanced-30", 4: "lifetime"}
+CODE_BY_KEY = {"basic-15": 1, "standard-30": 2, "advanced-30": 3, "lifetime": 4}
+
 ALPHABET = string.ascii_uppercase + string.digits
 
 def new_user_id(k=12):
@@ -75,6 +78,16 @@ def normalize_cpf(cpf):
 
 def valid_fullname(n):
     return bool(re.match(r"^[A-Za-zÀ-ÖØ-öø-ÿ'’-]+(?:\s+[A-Za-zÀ-ÖØ-öø-ÿ'’-]+)+$", (n or '').strip()))
+
+def plan_key_from_code(code):
+    try:
+        c = int(code)
+    except Exception:
+        c = 0
+    return PLAN_CODES.get(c)
+
+def plan_code_from_key(key):
+    return CODE_BY_KEY.get(key, 0)
 
 def login_required(f):
     @wraps(f)
@@ -147,21 +160,32 @@ def order_deadline_secs(created_at):
     now = datetime.utcnow()
     return max(0, int((exp - now).total_seconds()))
 
-def activate_user_plan(user_id, plan):
+def set_user_plan_code(user_id, code):
     now = datetime.utcnow()
-    expires_at = None if plan["lifetime"] else now + timedelta(days=plan["duration_days"])
-    update = {
-        "plan": {
-            "key": plan["key"],
-            "name": plan["name"],
+    key = plan_key_from_code(code)
+    info = PLANS.get(key) if key else None
+    expires_at = None
+    if info and not info["lifetime"]:
+        expires_at = now + timedelta(days=info["duration_days"])
+    update = {}
+    if info:
+        update["plan"] = {
+            "key": info["key"],
+            "name": info["name"],
             "activated_at": now,
             "expires_at": expires_at,
-            "limit_per_day": plan["limit_per_day"],
-            "support": plan["support"],
-            "period": plan["period"],
+            "limit_per_day": info["limit_per_day"],
+            "support": info["support"],
+            "period": info["period"],
         }
-    }
+    else:
+        update["plan"] = None
+    update["plan_code"] = int(code or 0)
     db.users.update_one({"_id": user_id}, {"$set": update})
+
+def activate_user_plan(user_id, plan):
+    code = plan_code_from_key(plan["key"]) if plan else 0
+    set_user_plan_code(user_id, code)
 
 def safe_user_id():
     return session.get("user_id")
@@ -179,11 +203,42 @@ def plan_by_key_or_name(plan_key=None, plan_name=None):
         return PLANS[NAME_TO_KEY[plan_name.lower()]]
     return None
 
-def is_plan_active(plan):
+def is_user_plan_active(user):
+    if not user:
+        return False
+    code = int(user.get("plan_code") or 0)
+    if code <= 0:
+        return False
+    plan = user.get("plan")
     if not plan:
+        key = plan_key_from_code(code)
+        info = PLANS.get(key) if key else None
+        if not info:
+            return False
+        if info["lifetime"]:
+            return True
         return False
     exp = plan.get("expires_at")
     return exp is None or datetime.utcnow() < exp
+
+def ensure_plan_code(user):
+    if not user:
+        return None
+    if user.get("plan_code") is None:
+        code = 0
+        p = user.get("plan")
+        if p and p.get("key"):
+            code = plan_code_from_key(p["key"])
+        db.users.update_one({"_id": user["_id"]}, {"$set": {"plan_code": code}})
+        user["plan_code"] = code
+    return user
+
+def get_effective_plan_info(user):
+    plan = user.get("plan") if user else None
+    code = int(user.get("plan_code") or 0) if user else 0
+    key = plan.get("key") if plan else plan_key_from_code(code)
+    info = PLANS.get(key) if key else None
+    return info, plan
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -211,7 +266,7 @@ def register():
     while True:
         attempts += 1
         uid = new_user_id(12)
-        user = {'_id': uid, 'username': username, 'username_lower': username.lower(), 'email': email, 'email_lower': email.lower(), 'password_hash': generate_password_hash(password), 'created_at': datetime.utcnow(), 'last_login_at': None}
+        user = {'_id': uid, 'username': username, 'username_lower': username.lower(), 'email': email, 'email_lower': email.lower(), 'password_hash': generate_password_hash(password), 'created_at': datetime.utcnow(), 'last_login_at': None, 'plan_code': 0, 'plan': None}
         try:
             db.users.insert_one(user)
             break
@@ -251,6 +306,7 @@ def login():
     pwd_hash = user.get('password_hash')
     if not pwd_hash or not check_password_hash(pwd_hash, password):
         return jsonify({'ok': False, 'error': 'Credenciais inválidas.'}), 401
+    ensure_plan_code(user)
     db.users.update_one({'_id': user['_id']}, {'$set': {'last_login_at': datetime.utcnow()}})
     session.clear()
     session['user_id'] = user['_id']
@@ -282,20 +338,25 @@ def gateway_pix_payment():
 @login_required
 def api_me():
     user = get_user()
-    plan = user.get('plan') if user else None
-    active = is_plan_active(plan) if plan else False
+    user = ensure_plan_code(user)
+    info, plan_doc = get_effective_plan_info(user)
+    active = is_user_plan_active(user)
     today = datetime.utcnow().date().isoformat()
     usage = db.usage.find_one({'user_id': user['_id'], 'date': today}) if user else None
     used = usage.get('count', 0) if usage else 0
-    expires = plan.get('expires_at').isoformat() if plan and plan.get('expires_at') else None
+    expires = plan_doc.get('expires_at').isoformat() if plan_doc and plan_doc.get('expires_at') else None
+    key = plan_doc.get('key') if plan_doc else (info['key'] if info else None)
+    name = plan_doc.get('name') if plan_doc else (info['name'] if info else None)
+    limit_per_day = plan_doc.get('limit_per_day') if plan_doc and plan_doc.get('limit_per_day') is not None else (info['limit_per_day'] if info else 0)
     return jsonify({
         'ok': True,
         'user': {'id': user['_id'], 'username': user['username']},
         'plan': {
             'active': active,
-            'key': plan.get('key') if plan else None,
-            'name': plan.get('name') if plan else None,
-            'limit_per_day': plan.get('limit_per_day') if plan else 0,
+            'code': int(user.get('plan_code') or 0),
+            'key': key,
+            'name': name,
+            'limit_per_day': limit_per_day,
             'expires_at': expires
         },
         'usage_today': {'used': used, 'date': today}
@@ -305,10 +366,15 @@ def api_me():
 @login_required
 def feature_use():
     user = get_user()
-    plan = user.get('plan') if user else None
-    if not is_plan_active(plan):
+    user = ensure_plan_code(user)
+    if not is_user_plan_active(user):
         return jsonify({'ok': False, 'error': 'Plano inativo. Atualize seu plano para usar as funcionalidades.'}), 403
-    limit = int(plan.get('limit_per_day') or 0)
+    info, plan_doc = get_effective_plan_info(user)
+    limit = 0
+    if plan_doc and plan_doc.get('limit_per_day') is not None:
+        limit = int(plan_doc.get('limit_per_day') or 0)
+    elif info:
+        limit = int(info.get('limit_per_day') or 0)
     if limit <= 0:
         return jsonify({'ok': False, 'error': 'Seu plano não permite uso. Atualize seu plano.'}), 403
     today = datetime.utcnow().date().isoformat()
@@ -349,7 +415,8 @@ def api_pay_create():
     if not user_id:
         return jsonify({"ok": False, "error": "Não autenticado."}), 401
     created_at = datetime.utcnow()
-    reference = f"user:{user_id}|plan:{plan['key']}|ts:{int(created_at.timestamp())}"
+    code = plan_code_from_key(plan['key'])
+    reference = f"user:{user_id}|plan:{plan['key']}|code:{code}|ts:{int(created_at.timestamp())}"
     base = request.url_root.rstrip('/')
     webhook_url = base + url_for('pushinpay_webhook')
     try:
@@ -364,6 +431,7 @@ def api_pay_create():
         "user_id": user_id,
         "username": session.get("username"),
         "plan": {k: v for k, v in plan.items()},
+        "plan_code": code,
         "fullname": fullname,
         "cpf": cpf,
         "transaction_id": tid,
