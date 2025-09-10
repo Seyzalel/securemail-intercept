@@ -49,6 +49,28 @@ def brl_display(cents):
 def now_utc():
     return datetime.utcnow()
 
+def parse_dt(s):
+    if not s:
+        return None
+    try:
+        t = s.strip()
+        if t.endswith("Z"):
+            t = t[:-1] + "+00:00"
+        dt = datetime.fromisoformat(t)
+        if dt.tzinfo is not None:
+            dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+        return dt
+    except Exception:
+        return None
+
+def iso_or_none(v):
+    if isinstance(v, datetime):
+        try:
+            return v.isoformat()
+        except Exception:
+            return str(v)
+    return v if v is not None else ""
+
 def admin_required(fn):
     def _wrap(*args, **kwargs):
         uid = session.get("user_id")
@@ -84,6 +106,7 @@ def activate_user_plan(user_id, plan_key, extend=False):
             "limit_per_day": info["limit_per_day"],
             "support": info["support"],
             "period": info["period"],
+            "lifetime": info["lifetime"],
         },
         "plan_code": plan_code_from_key(info["key"]),
     }
@@ -135,29 +158,32 @@ def list_users():
     active = request.args.get("active")
     page = max(1, int(request.args.get("page") or 1))
     size = max(1, min(200, int(request.args.get("size") or 25)))
-    filt = {}
+    clauses = []
     if q:
-        filt["$or"] = [
-            {"username": {"$regex": q, "$options": "i"}},
-            {"email": {"$regex": q, "$options": "i"}},
-            {"username_lower": {"$regex": q.lower(), "$options": "i"}},
-            {"email_lower": {"$regex": q.lower(), "$options": "i"}},
-        ]
+        qq = q
+        ql = q.lower()
+        clauses.append({"$or": [
+            {"username": {"$regex": qq, "$options": "i"}},
+            {"email": {"$regex": qq, "$options": "i"}},
+            {"username_lower": {"$regex": ql, "$options": "i"}},
+            {"email_lower": {"$regex": ql, "$options": "i"}},
+        ]})
     if admin_flag in ("yes", "no"):
-        filt["admin"] = admin_flag
+        clauses.append({"admin": admin_flag})
     if active in ("true", "false"):
         now = now_utc()
         if active == "true":
-            filt["$or"] = filt.get("$or", []) + [
+            clauses.append({"$or": [
                 {"plan.lifetime": True},
                 {"plan.expires_at": None},
                 {"plan.expires_at": {"$gt": now}},
-            ]
+            ]})
         else:
-            filt["$or"] = filt.get("$or", []) + [
+            clauses.append({"$or": [
                 {"plan": None},
                 {"plan.expires_at": {"$lte": now}},
-            ]
+            ]})
+    filt = {"$and": clauses} if clauses else {}
     total = db.users.count_documents(filt)
     cur = db.users.find(filt).sort([("created_at", DESCENDING)]).skip((page - 1) * size).limit(size)
     items = []
@@ -179,6 +205,7 @@ def list_users():
                 "limit_per_day": plan.get("limit_per_day"),
                 "support": plan.get("support"),
                 "period": plan.get("period"),
+                "lifetime": plan.get("lifetime"),
             },
             "suspended": bool(u.get("suspended") or False),
         })
@@ -199,6 +226,7 @@ def change_user_plan(user_id):
     if not ok:
         return jsonify({"ok": False, "error": "Falha ao ativar plano."}), 500
     u = db.users.find_one({"_id": user_id})
+    log_admin("user.plan.set", session.get("user_id"), target=user_id, payload={"plan_key": plan_key, "extend": extend}, result={"plan_code": u.get("plan_code")})
     return jsonify({"ok": True, "user": {"id": user_id, "plan_code": u.get("plan_code"), "plan": u.get("plan")}})
 
 @admin_bp.route("/api/users/<user_id>/deactivate", methods=["POST"])
@@ -206,14 +234,16 @@ def change_user_plan(user_id):
 def deactivate_plan(user_id):
     deactivate_user_plan(user_id)
     u = db.users.find_one({"_id": user_id})
+    log_admin("user.plan.deactivate", session.get("user_id"), target=user_id)
     return jsonify({"ok": True, "user": {"id": user_id, "plan_code": u.get("plan_code"), "plan": u.get("plan")}})
 
 @admin_bp.route("/api/users/<user_id>/usage/reset", methods=["POST"])
 @admin_required
 def reset_usage(user_id):
     today = now_utc().date().isoformat()
-    db.usage.update_one({"user_id": user_id, "date": today}, {"$set": {"count": 0}})
+    db.usage.update_one({"user_id": user_id, "date": today}, {"$set": {"count": 0}}, upsert=True)
     doc = db.usage.find_one({"user_id": user_id, "date": today}) or {"count": 0}
+    log_admin("user.usage.reset", session.get("user_id"), target=user_id, result={"date": today, "used": doc.get("count", 0)})
     return jsonify({"ok": True, "user_id": user_id, "date": today, "used": doc.get("count", 0)})
 
 @admin_bp.route("/api/users/<user_id>/admin-flag", methods=["POST"])
@@ -225,6 +255,7 @@ def set_admin_flag(user_id):
         return jsonify({"ok": False, "error": "Valor inválido."}), 400
     db.users.update_one({"_id": user_id}, {"$set": {"admin": val}})
     u = db.users.find_one({"_id": user_id})
+    log_admin("user.admin.flag", session.get("user_id"), target=user_id, payload={"value": val})
     return jsonify({"ok": True, "user": {"id": user_id, "admin": u.get("admin", "no")}})
 
 @admin_bp.route("/api/users/<user_id>/logout", methods=["POST"])
@@ -232,6 +263,7 @@ def set_admin_flag(user_id):
 def force_logout_user(user_id):
     now = now_utc()
     db.users.update_one({"_id": user_id}, {"$set": {"session_revoked_at": now}, "$inc": {"session_version": 1}})
+    log_admin("user.logout.force", session.get("user_id"), target=user_id, result={"revoked_at": now})
     return jsonify({"ok": True, "user_id": user_id, "revoked_at": now})
 
 @admin_bp.route("/api/users/<user_id>/suspend", methods=["POST"])
@@ -239,12 +271,14 @@ def force_logout_user(user_id):
 def suspend_user(user_id):
     now = now_utc()
     db.users.update_one({"_id": user_id}, {"$set": {"suspended": True, "suspended_at": now}})
+    log_admin("user.suspend", session.get("user_id"), target=user_id, result={"suspended": True})
     return jsonify({"ok": True, "user_id": user_id, "suspended": True, "suspended_at": now})
 
 @admin_bp.route("/api/users/<user_id>/unsuspend", methods=["POST"])
 @admin_required
 def unsuspend_user(user_id):
     db.users.update_one({"_id": user_id}, {"$set": {"suspended": False}, "$unset": {"suspended_at": ""}})
+    log_admin("user.unsuspend", session.get("user_id"), target=user_id, result={"suspended": False})
     return jsonify({"ok": True, "user_id": user_id, "suspended": False})
 
 @admin_bp.route("/api/users/<user_id>", methods=["DELETE"])
@@ -256,6 +290,7 @@ def delete_user(user_id):
     db.orders.update_many({"user_id": user_id}, {"$set": {"user_deleted": True}})
     db.usage.delete_many({"user_id": user_id})
     db.users.delete_one({"_id": user_id})
+    log_admin("user.delete", session.get("user_id"), target=user_id)
     return jsonify({"ok": True, "deleted_user_id": user_id})
 
 @admin_bp.route("/api/transactions", methods=["GET"])
@@ -280,16 +315,12 @@ def list_transactions():
         filt["status"] = status
     if date_from or date_to:
         rng = {}
-        if date_from:
-            try:
-                rng["$gte"] = datetime.fromisoformat(date_from)
-            except Exception:
-                pass
-        if date_to:
-            try:
-                rng["$lte"] = datetime.fromisoformat(date_to)
-            except Exception:
-                pass
+        df = parse_dt(date_from)
+        dt = parse_dt(date_to)
+        if df:
+            rng["$gte"] = df
+        if dt:
+            rng["$lte"] = dt
         if rng:
             filt["created_at"] = rng
     total = db.orders.count_documents(filt)
@@ -346,6 +377,7 @@ def transaction_set_status(tid):
         activate_user_plan(o.get("user_id"), p.get("key"), extend=False)
     if target in ("refunded", "canceled", "cancelled"):
         deactivate_user_plan(o.get("user_id"))
+    log_admin("transaction.status.set", session.get("user_id"), target=tid, payload={"status": target})
     return jsonify({"ok": True, "order": res})
 
 @admin_bp.route("/api/transactions/<tid>/receipt", methods=["GET"])
@@ -390,73 +422,15 @@ def transaction_receipt(tid):
             "plan_snapshot": (db.users.find_one({"_id": o.get("user_id")}) or {}).get("plan"),
         },
     }
-    fmt = str(request.args.get("format") or "json").lower()
-    if fmt == "json":
-        return jsonify(proof)
-    html = f"""
-    <html>
-      <head>
-        <meta charset="utf-8"/>
-        <title>Comprovante {proof['transaction_id']}</title>
-        <style>
-          body{{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#fff;color:#111;padding:24px}}
-          .card{{max-width:860px;margin:0 auto;border:1px solid #eee;border-radius:16px;padding:24px}}
-          h1{{font-size:22px;margin:0 0 12px}}
-          h2{{font-size:18px;margin:24px 0 8px}}
-          table{{width:100%;border-collapse:collapse}}
-          td,th{{text-align:left;padding:8px;border-bottom:1px solid #f0f0f0;font-size:14px;vertical-align:top}}
-          .kpi{{display:flex;gap:16px;margin:12px 0}}
-          .pill{{display:inline-block;padding:4px 10px;border-radius:999px;background:#f5f5f7;font-size:12px}}
-          .amount{{font-weight:700}}
-          .footer{{margin-top:16px;font-size:12px;color:#555}}
-          .ok{{color:#0a7}}
-        </style>
-      </head>
-      <body>
-        <div class="card">
-          <h1>Comprovante de Pagamento</h1>
-          <div class="kpi">
-            <div class="pill">TID: {proof['transaction_id']}</div>
-            <div class="pill">{'Pago' if proof['status']=='paid' else proof['status']}</div>
-            <div class="pill">{'Webhook verificado' if proof['webhook_verified'] else 'Verificação manual/consulta'}</div>
-          </div>
-          <h2>Valores</h2>
-          <table>
-            <tr><th>Valor</th><td class="amount">{proof['amount_display']}</td></tr>
-            <tr><th>Plano</th><td>{proof['plan']['name']} ({proof['plan']['key']})</td></tr>
-            <tr><th>Período</th><td>{proof['plan']['period']}</td></tr>
-            <tr><th>Limite por dia</th><td>{proof['plan']['limit_per_day']}</td></tr>
-            <tr><th>Suporte</th><td>{proof['plan']['support']}</td></tr>
-          </table>
-          <h2>Pagador</h2>
-          <table>
-            <tr><th>Usuário</th><td>{proof['user']['username']}</td></tr>
-            <tr><th>E-mail</th><td>{proof['user']['email']}</td></tr>
-            <tr><th>Nome completo</th><td>{proof['user']['fullname']}</td></tr>
-            <tr><th>CPF</th><td>{proof['user']['cpf']}</td></tr>
-          </table>
-          <h2>Transação</h2>
-          <table>
-            <tr><th>Status</th><td>{proof['status']}</td></tr>
-            <tr><th>Criada em</th><td>{proof['created_at']}</td></tr>
-            <tr><th>Paga em</th><td>{proof['paid_at']}</td></tr>
-          </table>
-          <h2>Entrega do Serviço</h2>
-          <table>
-            <tr><th>Plano ativo</th><td>{'Sim' if proof['service_delivery']['plan_activated'] else 'Não'}</td></tr>
-            <tr><th>Snapshot do plano</th><td><pre>{json.dumps(proof['service_delivery']['plan_snapshot'], default=str, ensure_ascii=False, indent=2)}</pre></td></tr>
-          </table>
-          <h2>Dados PushinPay</h2>
-          <table>
-            <tr><th>Resposta de criação</th><td><pre>{json.dumps(proof['pushinpay_response'], default=str, ensure_ascii=False, indent=2)}</pre></td></tr>
-            <tr><th>Última consulta</th><td><pre>{json.dumps(proof['pushinpay_last'], default=str, ensure_ascii=False, indent=2)}</pre></td></tr>
-          </table>
-          <div class="footer">Este comprovante comprova o pagamento legítimo e a entrega do serviço relacionado ao plano acima, vinculado ao usuário indicado.</div>
-        </div>
-      </body>
-    </html>
-    """
-    return html
+    return jsonify(proof)
+
+def safe_csv_cell(s):
+    if s is None:
+        return ""
+    x = str(s)
+    if x[:1] in ("=", "+", "-", "@"):
+        return "'" + x
+    return x
 
 @admin_bp.route("/api/export/transactions.csv", methods=["GET"])
 @admin_required
@@ -478,16 +452,12 @@ def export_transactions_csv():
         filt["status"] = status
     if date_from or date_to:
         rng = {}
-        if date_from:
-            try:
-                rng["$gte"] = datetime.fromisoformat(date_from)
-            except Exception:
-                pass
-        if date_to:
-            try:
-                rng["$lte"] = datetime.fromisoformat(date_to)
-            except Exception:
-                pass
+        df = parse_dt(date_from)
+        dt = parse_dt(date_to)
+        if df:
+            rng["$gte"] = df
+        if dt:
+            rng["$lte"] = dt
         if rng:
             filt["created_at"] = rng
     cur = db.orders.find(filt).sort([("created_at", DESCENDING)])
@@ -497,17 +467,17 @@ def export_transactions_csv():
     for o in cur:
         p = o.get("plan") or {}
         writer.writerow([
-            o.get("transaction_id"),
-            o.get("status"),
-            o.get("username"),
-            o.get("user_id"),
-            o.get("fullname"),
-            o.get("cpf"),
-            p.get("key"),
-            p.get("name"),
-            p.get("price_cents"),
-            o.get("created_at"),
-            o.get("paid_at"),
+            safe_csv_cell(o.get("transaction_id")),
+            safe_csv_cell(o.get("status")),
+            safe_csv_cell(o.get("username")),
+            safe_csv_cell(o.get("user_id")),
+            safe_csv_cell(o.get("fullname")),
+            safe_csv_cell(o.get("cpf")),
+            safe_csv_cell(p.get("key")),
+            safe_csv_cell(p.get("name")),
+            safe_csv_cell(p.get("price_cents")),
+            safe_csv_cell(iso_or_none(o.get("created_at"))),
+            safe_csv_cell(iso_or_none(o.get("paid_at"))),
         ])
     mem = io.BytesIO()
     mem.write("\ufeff".encode("utf-8"))
@@ -520,16 +490,19 @@ def export_transactions_csv():
 def export_users_csv():
     q = (request.args.get("q") or "").strip()
     admin_flag = request.args.get("admin")
-    filt = {}
+    clauses = []
     if q:
-        filt["$or"] = [
-            {"username": {"$regex": q, "$options": "i"}},
-            {"email": {"$regex": q, "$options": "i"}},
-            {"username_lower": {"$regex": q.lower(), "$options": "i"}},
-            {"email_lower": {"$regex": q.lower(), "$options": "i"}},
-        ]
+        qq = q
+        ql = q.lower()
+        clauses.append({"$or": [
+            {"username": {"$regex": qq, "$options": "i"}},
+            {"email": {"$regex": qq, "$options": "i"}},
+            {"username_lower": {"$regex": ql, "$options": "i"}},
+            {"email_lower": {"$regex": ql, "$options": "i"}},
+        ]})
     if admin_flag in ("yes", "no"):
-        filt["admin"] = admin_flag
+        clauses.append({"admin": admin_flag})
+    filt = {"$and": clauses} if clauses else {}
     cur = db.users.find(filt).sort([("created_at", DESCENDING)])
     output = io.StringIO()
     writer = csv.writer(output)
@@ -537,17 +510,17 @@ def export_users_csv():
     for u in cur:
         p = u.get("plan") or {}
         writer.writerow([
-            u.get("_id"),
-            u.get("username"),
-            u.get("email"),
-            u.get("admin", "no"),
-            u.get("created_at"),
-            u.get("last_login_at"),
-            int(u.get("plan_code") or 0),
-            p.get("key"),
-            p.get("name"),
-            p.get("expires_at"),
-            bool(u.get("suspended") or False),
+            safe_csv_cell(u.get("_id")),
+            safe_csv_cell(u.get("username")),
+            safe_csv_cell(u.get("email")),
+            safe_csv_cell(u.get("admin", "no")),
+            safe_csv_cell(iso_or_none(u.get("created_at"))),
+            safe_csv_cell(iso_or_none(u.get("last_login_at"))),
+            safe_csv_cell(int(u.get("plan_code") or 0)),
+            safe_csv_cell(p.get("key")),
+            safe_csv_cell(p.get("name")),
+            safe_csv_cell(iso_or_none(p.get("expires_at"))),
+            safe_csv_cell(bool(u.get("suspended") or False)),
         ])
     mem = io.BytesIO()
     mem.write("\ufeff".encode("utf-8"))
@@ -564,6 +537,24 @@ def list_audit():
     cur = db.admin_logs.find({}).sort([("created_at", DESCENDING)]).skip((page - 1) * size).limit(size)
     items = list(cur)
     return jsonify({"ok": True, "page": page, "size": size, "total": total, "items": items})
+
+@admin_bp.route("/api/config/engineering", methods=["GET"])
+@admin_required
+def get_config_engineering():
+    doc = db.config.find_one({"_id": "engineering"}) or {}
+    data = {"username": doc.get("username"), "link": doc.get("link"), "updated_at": doc.get("updated_at")}
+    return jsonify({"ok": True, "data": data})
+
+@admin_bp.route("/api/config/engineering", methods=["POST"])
+@admin_required
+def set_config_engineering():
+    data = request.get_json(force=True, silent=True) or {}
+    username = str(data.get("username") or "").strip()
+    link = str(data.get("link") or "").strip()
+    up = {"username": username, "link": link, "updated_at": now_utc()}
+    db.config.update_one({"_id": "engineering"}, {"$set": up}, upsert=True)
+    log_admin("config.engineering.update", session.get("user_id"), target="engineering", payload={"username": username, "link": link})
+    return jsonify({"ok": True})
 
 def log_admin(action, actor_id, target=None, payload=None, result=None):
     try:
