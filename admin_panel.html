@@ -6,65 +6,82 @@
 <title>Painel Administrador</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#ffffff;--text:#0b0b0b;--muted:#6b7280;--soft:#f3f4f6;--soft2:#eef2f7;--line:#e5e7eb;--brand:#0a84ff;--brand-2:#007aff;--ok:#10b981;--warn:#f59e0b;--danger:#ef4444}
+:root{--bg:#0b0b0b;--card:#111213;--surface:#15161a;--soft:#0f1115;--soft2:#0d0f13;--line:#1f232b;--text:#e7eaee;--muted:#9aa3af;--brand:#0ea5e9;--brand-2:#22d3ee;--ok:#22c55e;--warn:#f59e0b;--danger:#ef4444;--shadow:0 10px 30px rgba(0,0,0,.35)}
 *{box-sizing:border-box}
 html,body{height:100%}
-body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.4}
-.container{max-width:1200px;margin:0 auto;padding:16px}
-.header{display:flex;align-items:center;justify-content:space-between;padding:12px 0}
-.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px}
-.brand-badge{width:28px;height:28px;border-radius:8px;background:var(--brand);display:grid;place-items:center;color:#fff}
+body{margin:0;background:linear-gradient(180deg,#0a0c10 0%,#0a0c10 60%,#0b0e14 100%);color:var(--text);font-family:Inter,-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.5}
+.container{max-width:1220px;margin:0 auto;padding:20px}
+.header{display:flex;align-items:center;justify-content:space-between;padding:8px 0 18px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px;letter-spacing:.2px}
 .header-actions{display:flex;gap:8px;flex-wrap:wrap}
-button{appearance:none;border:0;border-radius:10px;padding:10px 14px;background:var(--brand);color:#fff;font-weight:600;cursor:pointer;transition:transform .02s ease,opacity .2s ease}
+button{appearance:none;border:0;border-radius:12px;padding:10px 14px;background:linear-gradient(180deg,var(--brand) 0%,var(--brand-2) 100%);color:#05141c;font-weight:800;cursor:pointer;transition:transform .06s ease,opacity .2s ease,background .2s ease;box-shadow:var(--shadow)}
 button:active{transform:scale(.98)}
-button.ghost{background:#fff;color:var(--text);border:1px solid var(--line)}
-button.soft{background:var(--soft);color:var(--text)}
-button.ok{background:var(--ok)}
-button.warn{background:var(--warn)}
-button.danger{background:var(--danger)}
-.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:8px 0 20px}
-.kpi{border:1px solid var(--line);border-radius:16px;padding:16px;background:#fff;display:flex;flex-direction:column;gap:6px}
-.kpi .label{color:var(--muted);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
-.kpi .value{font-size:24px;font-weight:800}
+button.ghost{background:transparent;color:var(--text);border:1px solid var(--line);box-shadow:none}
+button.soft{background:#0b1620;color:#bfe8ff;border:1px solid #123146}
+button.ok{background:linear-gradient(180deg,#16a34a 0%,#22c55e 100%);color:#04150b}
+button.warn{background:linear-gradient(180deg,#d97706 0%,#f59e0b 100%);color:#1b0f03}
+button.danger{background:linear-gradient(180deg,#dc2626 0%,#ef4444 100%);color:#1b0606}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:6px 0 22px}
+.kpi{border:1px solid var(--line);border-radius:18px;padding:16px;background:linear-gradient(180deg,#0f1218 0%,#0c0f14 100%);display:flex;flex-direction:column;gap:6px;box-shadow:var(--shadow)}
+.kpi .label{color:var(--muted);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em}
+.kpi .value{font-size:26px;font-weight:800}
 .tabs{display:flex;gap:8px;border-bottom:1px solid var(--line);margin-bottom:12px;flex-wrap:wrap}
-.tab{padding:10px 14px;border-radius:10px 10px 0 0;background:var(--soft);cursor:pointer;font-weight:700}
-.tab.active{background:#fff;border:1px solid var(--line);border-bottom:1px solid #fff}
+.tab{padding:10px 14px;border-radius:12px 12px 0 0;background:#0c1218;color:#b7c0cb;cursor:pointer;font-weight:800;border:1px solid var(--line);border-bottom:none}
+.tab.active{background:#0e141c;color:#e7eaee}
 .tabpanel{display:none}
 .tabpanel.active{display:block}
-.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0 12px}
-.input,select{height:40px;border:1px solid var(--line);border-radius:10px;padding:0 12px;background:#fff;color:var(--text);font:inherit}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0 12px}
+.input,select{height:40px;border:1px solid var(--line);border-radius:12px;padding:0 12px;background:#0f141b;color:var(--text);font:inherit;outline:none}
+.input:focus,select:focus{border-color:#1e293b;box-shadow:0 0 0 2px rgba(14,165,233,.2)}
 .input[type="datetime-local"]{padding-right:2px}
+.card{border:1px solid var(--line);border-radius:18px;background:#0e141c;box-shadow:var(--shadow)}
+.card-body{padding:16px}
+.grid{display:grid;gap:12px}
+.grid.cols-2{grid-template-columns:repeat(2,1fr)}
+@media(max-width:860px){.grid.cols-2{grid-template-columns:1fr}}
+.tablewrap{border:1px solid var(--line);border-radius:18px;overflow:hidden;background:#0d1219;box-shadow:var(--shadow)}
 .table{width:100%;border-collapse:separate;border-spacing:0}
+.table thead th{position:sticky;top:0;background:#0b1016;z-index:1}
 .table th,.table td{text-align:left;padding:12px;border-bottom:1px solid var(--line);font-size:14px;vertical-align:middle}
-.table th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.table tbody tr:nth-child(odd){background:#0e141c}
+.table tbody tr:hover{background:#0f1822}
+.table th{font-size:12px;color:#9aa3af;text-transform:uppercase;letter-spacing:.06em}
 .row-actions{display:flex;gap:6px;flex-wrap:wrap}
-.badge{display:inline-block;padding:4px 8px;border-radius:999px;background:var(--soft);font-size:12px}
-.badge.ok{background:rgba(16,185,129,.12);color:#065f46}
-.badge.warn{background:rgba(245,158,11,.12);color:#92400e}
-.badge.danger{background:rgba(239,68,68,.12);color:#7f1d1d}
-.pager{display:flex;align-items:center;gap:8px;justify-content:flex-end;margin-top:10px}
+.badge{display:inline-block;padding:4px 10px;border-radius:999px;background:#101826;font-size:12px;border:1px solid #1b2330;color:#cfe3ff}
+.badge.ok{background:rgba(34,197,94,.12);color:#7ee2a8;border-color:rgba(34,197,94,.25)}
+.badge.warn{background:rgba(245,158,11,.12);color:#ffd28a;border-color:rgba(245,158,11,.25)}
+.badge.danger{background:rgba(239,68,68,.12);color:#ff9b9b;border-color:rgba(239,68,68,.25)}
+.pager{display:flex;align-items:center;gap:8px;justify-content:flex-end;margin-top:12px}
 .pager .info{color:var(--muted);font-size:12px;margin-right:auto}
-.modal{position:fixed;inset:0;background:rgba(0,0,0,.22);display:none;align-items:center;justify-content:center;padding:16px;z-index:50}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;padding:16px;z-index:50;backdrop-filter:blur(3px)}
 .modal.show{display:flex}
-.modal-card{background:#fff;border-radius:16px;max-width:520px;width:100%;border:1px solid var(--line);box-shadow:0 10px 40px rgba(0,0,0,.07)}
-.modal-head{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;font-weight:800}
+.modal-card{background:#0c1117;border-radius:18px;max-width:560px;width:100%;border:1px solid var(--line);box-shadow:0 20px 60px rgba(0,0,0,.45)}
+.modal-head{padding:16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;font-weight:800}
 .modal-body{padding:16px;display:grid;gap:12px}
 .modal-foot{padding:12px 16px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:8px}
 .field{display:grid;gap:6px}
-.label{font-size:12px;color:var(--muted);font-weight:700}
-.toast{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:#111;color:#fff;padding:12px 16px;border-radius:12px;font-weight:600;opacity:0;pointer-events:none;transition:opacity .2s ease,transform .2s ease;z-index:60}
+.label{font-size:12px;color:#9aa3af;font-weight:800}
+.toast{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:linear-gradient(180deg,#0b1118,#0a0f15);color:#fff;padding:12px 16px;border-radius:12px;font-weight:800;opacity:0;pointer-events:none;transition:opacity .2s ease,transform .2s ease;z-index:60;border:1px solid var(--line);box-shadow:var(--shadow)}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(-6px)}
 hr.soft{border:0;border-top:1px solid var(--line);margin:12px 0}
 .hidden{display:none}
-@media(max-width:900px){.kpis{grid-template-columns:1fr}}
-@media(max-width:640px){.toolbar{flex-direction:column;align-items:stretch}.pager{flex-direction:column;align-items:stretch}.row-actions{gap:4px}}
+.link{color:#86e1ff;text-decoration:none}
+.link:hover{text-decoration:underline}
+.section{margin-top:10px}
+.settings-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media(max-width:1024px){.settings-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:640px){.settings-grid{grid-template-columns:1fr}.toolbar{flex-direction:column;align-items:stretch}.pager{flex-direction:column;align-items:stretch}.row-actions{gap:4px}}
+.settings-card{padding:16px;border:1px solid var(--line);border-radius:16px;background:#0c121a;display:flex;justify-content:space-between;align-items:center;gap:12px}
+.settings-card .title{font-weight:800}
+.settings-card .desc{color:#9aa3af;font-size:13px}
 </style>
 </head>
 <body>
 <div class="container">
 <div class="header">
-<div class="brand"><div class="brand-badge">S</div><div>Superadmin</div></div>
+<div class="brand">Superadmin</div>
 <div class="header-actions">
 <button class="soft" id="refreshAll">Atualizar</button>
 <a class="ghost" href="/logout">Sair</a>
@@ -79,6 +96,7 @@ hr.soft{border:0;border-top:1px solid var(--line);margin:12px 0}
 <div class="tab active" data-tab="users">Usuários</div>
 <div class="tab" data-tab="transactions">Transações</div>
 <div class="tab" data-tab="audit">Auditoria</div>
+<div class="tab" data-tab="settings">Configurações</div>
 </div>
 <div class="tabpanel active" id="tab-users">
 <div class="toolbar">
@@ -99,6 +117,7 @@ hr.soft{border:0;border-top:1px solid var(--line);margin:12px 0}
 <button id="u-refresh">Atualizar</button>
 <button class="ghost" id="u-export">Exportar CSV</button>
 </div>
+<div class="tablewrap">
 <table class="table" id="u-table">
 <thead>
 <tr>
@@ -116,6 +135,7 @@ hr.soft{border:0;border-top:1px solid var(--line);margin:12px 0}
 </thead>
 <tbody></tbody>
 </table>
+</div>
 <div class="pager">
 <div class="info" id="u-info"></div>
 <button class="ghost" id="u-prev">Anterior</button>
@@ -142,6 +162,7 @@ hr.soft{border:0;border-top:1px solid var(--line);margin:12px 0}
 <button id="t-refresh">Atualizar</button>
 <button class="ghost" id="t-export">Exportar CSV</button>
 </div>
+<div class="tablewrap">
 <table class="table" id="t-table">
 <thead>
 <tr>
@@ -157,6 +178,7 @@ hr.soft{border:0;border-top:1px solid var(--line);margin:12px 0}
 </thead>
 <tbody></tbody>
 </table>
+</div>
 <div class="pager">
 <div class="info" id="t-info"></div>
 <button class="ghost" id="t-prev">Anterior</button>
@@ -170,6 +192,7 @@ hr.soft{border:0;border-top:1px solid var(--line);margin:12px 0}
 </select>
 <button id="a-refresh">Atualizar</button>
 </div>
+<div class="tablewrap">
 <table class="table" id="a-table">
 <thead>
 <tr>
@@ -182,10 +205,24 @@ hr.soft{border:0;border-top:1px solid var(--line);margin:12px 0}
 </thead>
 <tbody></tbody>
 </table>
+</div>
 <div class="pager">
 <div class="info" id="a-info"></div>
 <button class="ghost" id="a-prev">Anterior</button>
 <button class="ghost" id="a-next">Próximo</button>
+</div>
+</div>
+<div class="tabpanel" id="tab-settings">
+<div class="section">
+<div class="settings-grid">
+<div class="settings-card">
+<div>
+<div class="title">Engenharia</div>
+<div class="desc">Gerenciar usuário e link de redefinição</div>
+</div>
+<button class="soft" id="btn-eng">Editar</button>
+</div>
+</div>
 </div>
 </div>
 </div>
@@ -227,41 +264,60 @@ hr.soft{border:0;border-top:1px solid var(--line);margin:12px 0}
 </div>
 </div>
 </div>
+<div class="modal" id="modal-eng">
+<div class="modal-card">
+<div class="modal-head"><div>Configurações de Engenharia</div><button class="ghost" id="eng-close">Fechar</button></div>
+<div class="modal-body">
+<div class="field"><div class="label">Nome de usuário</div><input id="eng-username" class="input" placeholder="usuario"></div>
+<div class="field"><div class="label">Link de redefinição</div><input id="eng-link" class="input" placeholder="https://..."></div>
+</div>
+<div class="modal-foot">
+<button class="ghost" id="eng-cancel">Cancelar</button>
+<button class="ok" id="eng-save">Salvar</button>
+</div>
+</div>
+</div>
 <div class="toast" id="toast"></div>
 <script>
 const $=s=>document.querySelector(s)
 const $$=s=>document.querySelectorAll(s)
 const state={users:{page:1,size:25,total:0,items:[]},tx:{page:1,size:25,total:0,items:[]},audit:{page:1,size:50,total:0,items:[]},selectedUser:null}
-function fmtDate(v){if(!v)return"";const d=new Date(v);if(isNaN(d))return v;return d.toLocaleString()}
+function fmtDate(v){if(!v)return"";const d=new Date(v);if(isNaN(d))return v;return d.toLocaleString('pt-BR')}
 function fmtMoneyBR(v){try{return new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v/100)}catch(e){return 'R$'+(v/100).toFixed(2).replace('.',',')}}
-function toast(t){const el=$("#toast");el.textContent=t;el.classList.add("show");setTimeout(()=>el.classList.remove("show"),2000)}
+function toast(t){const el=$("#toast");el.textContent=t;el.classList.add("show");setTimeout(()=>el.classList.remove("show"),2200)}
 function qs(p){const u=new URLSearchParams();Object.entries(p||{}).forEach(([k,v])=>{if(v!==undefined&&v!==null&&v!=="")u.set(k,v)});const s=u.toString();return s?("?"+s):""}
-function getJSON(u){return fetch(u,{credentials:"same-origin"}).then(r=>{if(!r.ok)throw new Error("Erro "+r.status);return r.json()})}
-function postJSON(u,body){return fetch(u,{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify(body||{})}).then(r=>r.json().then(j=>({ok:r.ok,status:r.status,body:j})))}
-function del(u){return fetch(u,{method:"DELETE",credentials:"same-origin"}).then(r=>r.json().then(j=>({ok:r.ok,status:r.status,body:j})))}
+function getJSON(u){return fetch(u,{credentials:"same-origin"}).then(async r=>{const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||("Erro "+r.status));return j})}
+function postJSON(u,body){return fetch(u,{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify(body||{})}).then(async r=>{const j=await r.json().catch(()=>({}));return{ok:r.ok,status:r.status,body:j}})}
+function del(u){return fetch(u,{method:"DELETE",credentials:"same-origin"}).then(async r=>{const j=await r.json().catch(()=>({}));return{ok:r.ok,status:r.status,body:j}})}
 function openModal(id){$(id).classList.add("show")}
 function closeModal(id){$(id).classList.remove("show")}
-function setActiveTab(id){$$(".tab").forEach(t=>t.classList.remove("active"));$$(".tabpanel").forEach(p=>p.classList.remove("active"));document.querySelector('.tab[data-tab="'+id+'"]').classList.add("active");$("#tab-"+id).classList.add("active")}
-function loadRevenue(){getJSON("/superadmin/api/metrics/revenue").then(d=>{if(!d.ok)throw new Error();$("#revAll").textContent=d.display.all_time;$("#rev7").textContent=d.display.last_7d;$("#rev30").textContent=d.display.last_30d}).catch(()=>{})}
-function loadUsers(){const q=$("#u-q").value.trim();const admin=$("#u-admin").value;const active=$("#u-active").value;const size=parseInt($("#u-size").value,10);state.users.size=size;const params={q,admin,active,page:state.users.page,size:state.users.size};getJSON("/superadmin/api/users"+qs(params)).then(d=>{if(!d.ok)throw new Error();state.users.total=d.total;state.users.items=d.items;renderUsers()}).catch(()=>{})}
-function renderUsers(){const tb=$("#u-table tbody");tb.innerHTML="";state.users.items.forEach(u=>{const tr=document.createElement("tr");const plan=u.plan||{};const status=plan&&plan.expires_at?new Date(plan.expires_at)>new Date():""||false;const active=plan&&(!plan.expires_at||new Date(plan.expires_at)>new Date());tr.innerHTML=`<td><div style="font-weight:700">${u.username||""}</div><div class="badge">${u.id}</div></td><td>${u.email||""}</td><td><span class="badge ${u.admin==='yes'?'ok':''}">${u.admin||"no"}</span></td><td>${fmtDate(u.created_at)}</td><td>${fmtDate(u.last_login_at)}</td><td>${plan.name||""}${plan.key?`<div class="badge">${plan.key}</div>`:""}</td><td>${fmtDate(plan.expires_at)||""}</td><td>${plan.limit_per_day??""}</td><td>${u.suspended?'<span class="badge danger">Suspenso</span>':(active?'<span class="badge ok">Ativo</span>':'<span class="badge warn">Inativo</span>')}</td><td><div class="row-actions"><button class="soft" data-act="plan" data-id="${u.id}" data-name="${u.username}">Plano</button><button class="ghost" data-act="extend" data-id="${u.id}" data-name="${u.username}">Estender</button><button class="ghost" data-act="deactivate" data-id="${u.id}" data-name="${u.username}">Desativar</button><button class="ghost" data-act="reset" data-id="${u.id}" data-name="${u.username}">Zerar uso</button><button class="ghost" data-act="admin" data-id="${u.id}" data-val="${u.admin==='yes'?'no':'yes'}">${u.admin==='yes'?'Remover admin':'Tornar admin'}</button><button class="ghost" data-act="logout" data-id="${u.id}">Forçar logout</button>${u.suspended?`<button class="warn" data-act="unsuspend" data-id="${u.id}">Reativar</button>`:`<button class="warn" data-act="suspend" data-id="${u.id}">Suspender</button>`}<button class="danger" data-act="delete" data-id="${u.id}">Excluir</button></div></td>`;tb.appendChild(tr)});const start=(state.users.page-1)*state.users.size+1;const end=Math.min(state.users.page*state.users.size,state.users.total);$("#u-info").textContent=state.users.total?`${start}–${end} de ${state.users.total}`:"0 de 0"}
-function usersAction(e){const b=e.target.closest("button");if(!b)return;const id=b.getAttribute("data-id");const name=b.getAttribute("data-name")||id;const act=b.getAttribute("data-act");if(act==="plan"){state.selectedUser={id,name};$("#mp-user").textContent=name;$("#mp-extend").value="false";openModal("#modal-plan")}else if(act==="extend"){state.selectedUser={id,name};$("#mp-user").textContent=name;$("#mp-extend").value="true";openModal("#modal-plan")}else if(act==="deactivate"){openConfirm("Desativar plano de "+name,()=>postJSON("/superadmin/api/users/"+id+"/deactivate",{}).then(r=>{if(r.ok&&r.body.ok){toast("Plano desativado");loadUsers()}else{toast(r.body.error||"Erro")}}))}else if(act==="reset"){openConfirm("Zerar uso de hoje de "+name,()=>postJSON("/superadmin/api/users/"+id+"/usage/reset",{}).then(r=>{if(r.ok&&r.body.ok){toast("Uso zerado");loadUsers()}else{toast(r.body.error||"Erro")}}))}else if(act==="admin"){const val=b.getAttribute("data-val");openConfirm((val==="yes"?"Tornar ":"Remover ")+name+" administrador",()=>postJSON("/superadmin/api/users/"+id+"/admin-flag",{value:val}).then(r=>{if(r.ok&&r.body.ok){toast("Atualizado");loadUsers()}else{toast(r.body.error||"Erro")}}))}else if(act==="logout"){openConfirm("Forçar logout de "+name,()=>postJSON("/superadmin/api/users/"+id+"/logout",{}).then(r=>{if(r.ok&&r.body.ok){toast("Logout forçado");}else{toast(r.body.error||"Erro")}}))}else if(act==="suspend"){openConfirm("Suspender "+name,()=>postJSON("/superadmin/api/users/"+id+"/suspend",{}).then(r=>{if(r.ok&&r.body.ok){toast("Usuário suspenso");loadUsers()}else{toast(r.body.error||"Erro")}}))}else if(act==="unsuspend"){openConfirm("Reativar "+name,()=>postJSON("/superadmin/api/users/"+id+"/unsuspend",{}).then(r=>{if(r.ok&&r.body.ok){toast("Usuário reativado");loadUsers()}else{toast(r.body.error||"Erro")}}))}else if(act==="delete"){openConfirm("Excluir usuário "+name+" e seus dados",()=>del("/superadmin/api/users/"+id).then(r=>{if(r.ok&&r.body.ok){toast("Usuário excluído");loadUsers()}else{toast(r.body.error||"Erro")}}))}}
+function setActiveTab(id){$$(".tab").forEach(t=>t.classList.remove("active"));$$(".tabpanel").forEach(p=>p.classList.remove("active"));document.querySelector('.tab[data-tab="'+id+'"]').classList.add("active");$("#tab-"+id).classList.add("active");if(id==="settings"){loadConfigEngPreview()}}
+function escapeHTML(s){return String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#39;")}
+function loadRevenue(){getJSON("/superadmin/api/metrics/revenue").then(d=>{if(!d.ok)throw new Error();$("#revAll").textContent=d.display.all_time;$("#rev7").textContent=d.display.last_7d;$("#rev30").textContent=d.display.last_30d}).catch(e=>{toast("Falha ao carregar receita")})}
+function loadUsers(){const q=$("#u-q").value.trim();const admin=$("#u-admin").value;const active=$("#u-active").value;const size=parseInt($("#u-size").value,10);state.users.size=size;const params={q,admin,active,page:state.users.page,size:state.users.size};getJSON("/superadmin/api/users"+qs(params)).then(d=>{if(!d.ok)throw new Error();state.users.total=d.total;state.users.items=d.items;renderUsers()}).catch(e=>{toast("Erro ao carregar usuários")})}
+function renderUsers(){const tb=$("#u-table tbody");tb.innerHTML="";state.users.items.forEach(u=>{const plan=u.plan||{};const active=(plan&&!plan.expires_at)|| (plan&&plan.expires_at&&new Date(plan.expires_at)>new Date());const tr=document.createElement("tr");tr.innerHTML=`<td><div style="font-weight:800">${escapeHTML(u.username||"")}</div><div class="badge">${escapeHTML(u.id||"")}</div></td><td>${escapeHTML(u.email||"")}</td><td><span class="badge ${u.admin==='yes'?'ok':''}">${escapeHTML(u.admin||"no")}</span></td><td>${fmtDate(u.created_at)}</td><td>${fmtDate(u.last_login_at)}</td><td>${escapeHTML(plan.name||"")}${plan.key?`<div class="badge">${escapeHTML(plan.key)}</div>`:""}</td><td>${fmtDate(plan.expires_at)||""}</td><td>${plan.limit_per_day??""}</td><td>${u.suspended?'<span class="badge danger">Suspenso</span>':(active?'<span class="badge ok">Ativo</span>':'<span class="badge warn">Inativo</span>')}</td><td><div class="row-actions"><button class="soft" data-act="plan" data-id="${escapeHTML(u.id)}" data-name="${escapeHTML(u.username||u.id)}">Plano</button><button class="ghost" data-act="extend" data-id="${escapeHTML(u.id)}" data-name="${escapeHTML(u.username||u.id)}">Estender</button><button class="ghost" data-act="deactivate" data-id="${escapeHTML(u.id)}" data-name="${escapeHTML(u.username||u.id)}">Desativar</button><button class="ghost" data-act="reset" data-id="${escapeHTML(u.id)}" data-name="${escapeHTML(u.username||u.id)}">Zerar uso</button><button class="ghost" data-act="admin" data-id="${escapeHTML(u.id)}" data-val="${u.admin==='yes'?'no':'yes'}">${u.admin==='yes'?'Remover admin':'Tornar admin'}</button><button class="ghost" data-act="logout" data-id="${escapeHTML(u.id)}">Forçar logout</button>${u.suspended?`<button class="warn" data-act="unsuspend" data-id="${escapeHTML(u.id)}">Reativar</button>`:`<button class="warn" data-act="suspend" data-id="${escapeHTML(u.id)}">Suspender</button>`}<button class="danger" data-act="delete" data-id="${escapeHTML(u.id)}">Excluir</button></div></td>`;tb.appendChild(tr)});const start=(state.users.page-1)*state.users.size+1;const end=Math.min(state.users.page*state.users.size,state.users.total);$("#u-info").textContent=state.users.total?`${start}–${end} de ${state.users.total}`:"0 de 0"}
+function usersAction(e){const b=e.target.closest("button");if(!b)return;const id=b.getAttribute("data-id");const name=b.getAttribute("data-name")||id;const act=b.getAttribute("data-act");if(act==="plan"){state.selectedUser={id,name};$("#mp-user").textContent=name;$("#mp-extend").value="false";openModal("#modal-plan")}else if(act==="extend"){state.selectedUser={id,name};$("#mp-user").textContent=name;$("#mp-extend").value="true";openModal("#modal-plan")}else if(act==="deactivate"){openConfirm("Desativar plano de "+name,()=>postJSON("/superadmin/api/users/"+id+"/deactivate",{}).then(r=>{if(r.ok&&r.body.ok){toast("Plano desativado");loadUsers()}else{toast(r.body.error||"Erro")}}))}else if(act==="reset"){openConfirm("Zerar uso de hoje de "+name,()=>postJSON("/superadmin/api/users/"+id+"/usage/reset",{}).then(r=>{if(r.ok&&r.body.ok){toast("Uso zerado");loadUsers()}else{toast(r.body.error||"Erro")}}))}else if(act==="admin"){const val=b.getAttribute("data-val");openConfirm((val==="yes"?"Tornar ":"Remover ")+name+" administrador",()=>postJSON("/superadmin/api/users/"+id+"/admin-flag",{value:val}).then(r=>{if(r.ok&&r.body.ok){toast("Atualizado");loadUsers()}else{toast(r.body.error||"Erro")}}))}else if(act==="logout"){openConfirm("Forçar logout de "+name,()=>postJSON("/superadmin/api/users/"+id+"/logout",{}).then(r=>{if(r.ok&&r.body.ok){toast("Logout forçado")}else{toast(r.body.error||"Erro")}}))}else if(act==="suspend"){openConfirm("Suspender "+name,()=>postJSON("/superadmin/api/users/"+id+"/suspend",{}).then(r=>{if(r.ok&&r.body.ok){toast("Usuário suspenso");loadUsers()}else{toast(r.body.error||"Erro")}}))}else if(act==="unsuspend"){openConfirm("Reativar "+name,()=>postJSON("/superadmin/api/users/"+id+"/unsuspend",{}).then(r=>{if(r.ok&&r.body.ok){toast("Usuário reativado");loadUsers()}else{toast(r.body.error||"Erro")}}))}else if(act==="delete"){openConfirm("Excluir usuário "+name+" e seus dados",()=>del("/superadmin/api/users/"+id).then(r=>{if(r.ok&&r.body.ok){toast("Usuário excluído");loadUsers()}else{toast(r.body.error||"Erro")}}))}}
 function savePlan(){const u=state.selectedUser;if(!u)return;const key=$("#mp-plan").value;const extend=$("#mp-extend").value==="true";postJSON("/superadmin/api/users/"+u.id+"/plan",{plan_key:key,extend}).then(r=>{if(r.ok&&r.body.ok){toast("Plano atualizado");closeModal("#modal-plan");loadUsers()}else{toast(r.body.error||"Erro")}})}
-function loadTx(){const q=$("#t-q").value.trim();const status=$("#t-status").value;const size=parseInt($("#t-size").value,10);state.tx.size=size;const from=$("#t-from").value;const to=$("#t-to").value;const params={q,status,from:from?new Date(from).toISOString():"",to:to?new Date(to).toISOString():"",page:state.tx.page,size:state.tx.size};getJSON("/superadmin/api/transactions"+qs(params)).then(d=>{if(!d.ok)throw new Error();state.tx.total=d.total;state.tx.items=d.items;renderTx()}).catch(()=>{})}
-function renderTx(){const tb=$("#t-table tbody");tb.innerHTML="";state.tx.items.forEach(o=>{const plan=o.plan||{};const tr=document.createElement("tr");tr.innerHTML=`<td><div style="font-weight:700">${o.transaction_id}</div><div class="badge">${o.id}</div></td><td>${o.username||""}<div class="badge">${o.user_id||""}</div></td><td>${plan.name||""}${plan.key?`<div class="badge">${plan.key}</div>`:""}</td><td>${fmtMoneyBR(o.price_cents||0)}</td><td>${badgeStatus(o.status)}</td><td>${fmtDate(o.created_at)}</td><td>${fmtDate(o.paid_at)}</td><td><div class="row-actions"><button class="ghost" data-act="detail" data-id="${o.transaction_id}">Detalhes</button><button class="ok" data-act="mark" data-status="paid" data-id="${o.transaction_id}">Marcar paga</button><button class="warn" data-act="mark" data-status="expired" data-id="${o.transaction_id}">Expirar</button><button class="danger" data-act="mark" data-status="refunded" data-id="${o.transaction_id}">Reembolsar</button><button class="soft" data-act="receipt" data-id="${o.transaction_id}">Comprovante</button></div></td>`;tb.appendChild(tr)});const start=(state.tx.page-1)*state.tx.size+1;const end=Math.min(state.tx.page*state.tx.size,state.tx.total);$("#t-info").textContent=state.tx.total?`${start}–${end} de ${state.tx.total}`:"0 de 0"}
-function badgeStatus(s){const m=String(s||"").toLowerCase();if(m==="paid")return '<span class="badge ok">Pago</span>';if(m==="pending")return '<span class="badge warn">Pendente</span>';if(m==="expired")return '<span class="badge danger">Expirado</span>';if(m==="refunded")return '<span class="badge danger">Reembolsado</span>';return '<span class="badge">'+s+'</span>'}
-function txAction(e){const b=e.target.closest("button");if(!b)return;const tid=b.getAttribute("data-id");const act=b.getAttribute("data-act");if(act==="detail"){getJSON("/superadmin/api/transactions/"+tid+"?refresh=1").then(d=>{if(d.ok){showDetail(tid,d.order,d.live)}else{toast("Erro")}})}else if(act==="mark"){const status=b.getAttribute("data-status");openConfirm("Alterar status para "+status.toUpperCase(),()=>postJSON("/superadmin/api/transactions/"+tid+"/status",{status}).then(r=>{if(r.ok&&r.body.ok){toast("Status atualizado");loadTx()}else{toast(r.body.error||"Erro")}}))}else if(act==="receipt"){window.open("/superadmin/api/transactions/"+tid+"/receipt?format=html","_blank")}}
-function showDetail(tid,order,live){const w=window.open("","_blank","width=920,height=720");const html=`<html><head><meta charset="utf-8"><title>Transação ${tid}</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:0;background:#fff;color:#111}pre{white-space:pre-wrap;word-break:break-word;background:#f7f7f8;padding:12px;border-radius:12px;border:1px solid #eee;overflow:auto}h1{font-size:20px;margin:16px}section{border-top:1px solid #eee;padding:16px}</style></head><body><h1>Transação ${tid}</h1><section><h3>Ordem</h3><pre>${escapeHTML(JSON.stringify(order,null,2))}</pre></section><section><h3>Consulta ao vivo</h3><pre>${escapeHTML(JSON.stringify(live,null,2))}</pre></section></body></html>`;w.document.write(html);w.document.close()}
-function escapeHTML(s){return String(s||"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")}
+function loadTx(){const q=$("#t-q").value.trim();const status=$("#t-status").value;const size=parseInt($("#t-size").value,10);state.tx.size=size;const from=$("#t-from").value;const to=$("#t-to").value;const params={q,status,from:from?new Date(from).toISOString():"",to:to?new Date(to).toISOString():"",page:state.tx.page,size:state.tx.size};getJSON("/superadmin/api/transactions"+qs(params)).then(d=>{if(!d.ok)throw new Error();state.tx.total=d.total;state.tx.items=d.items;renderTx()}).catch(e=>{toast("Erro ao carregar transações")})}
+function renderTx(){const tb=$("#t-table tbody");tb.innerHTML="";state.tx.items.forEach(o=>{const plan=o.plan||{};const tr=document.createElement("tr");tr.innerHTML=`<td><div style="font-weight:800">${escapeHTML(o.transaction_id||"")}</div><div class="badge">${escapeHTML(o.id||"")}</div></td><td>${escapeHTML(o.username||"")}<div class="badge">${escapeHTML(o.user_id||"")}</div></td><td>${escapeHTML(plan.name||"")}${plan.key?`<div class="badge">${escapeHTML(plan.key)}</div>`:""}</td><td>${fmtMoneyBR(o.price_cents||0)}</td><td>${badgeStatus(o.status)}</td><td>${fmtDate(o.created_at)}</td><td>${fmtDate(o.paid_at)}</td><td><div class="row-actions"><button class="ghost" data-act="detail" data-id="${escapeHTML(o.transaction_id)}">Detalhes</button><button class="ok" data-act="mark" data-status="paid" data-id="${escapeHTML(o.transaction_id)}">Marcar paga</button><button class="warn" data-act="mark" data-status="expired" data-id="${escapeHTML(o.transaction_id)}">Expirar</button><button class="danger" data-act="mark" data-status="refunded" data-id="${escapeHTML(o.transaction_id)}">Reembolsar</button><button class="soft" data-act="receipt" data-id="${escapeHTML(o.transaction_id)}">Comprovante</button></div></td>`;tb.appendChild(tr)});const start=(state.tx.page-1)*state.tx.size+1;const end=Math.min(state.tx.page*state.tx.size,state.tx.total);$("#t-info").textContent=state.tx.total?`${start}–${end} de ${state.tx.total}`:"0 de 0"}
+function badgeStatus(s){const m=String(s||"").toLowerCase();if(m==="paid")return '<span class="badge ok">Pago</span>';if(m==="pending")return '<span class="badge warn">Pendente</span>';if(m==="expired")return '<span class="badge danger">Expirado</span>';if(m==="refunded")return '<span class="badge danger">Reembolsado</span>';return '<span class="badge">'+escapeHTML(s)+'</span>'}
+function txAction(e){const b=e.target.closest("button");if(!b)return;const tid=b.getAttribute("data-id");const act=b.getAttribute("data-act");if(act==="detail"){getJSON("/superadmin/api/transactions/"+tid+"?refresh=1").then(d=>{if(d.ok){showDetail(tid,d.order,d.live)}else{toast("Erro")}})}else if(act==="mark"){const status=b.getAttribute("data-status");openConfirm("Alterar status para "+status.toUpperCase(),()=>postJSON("/superadmin/api/transactions/"+tid+"/status",{status}).then(r=>{if(r.ok&&r.body.ok){toast("Status atualizado");loadTx()}else{toast(r.body.error||"Erro")}}))}else if(act==="receipt"){renderReceipt(tid)}}
+function showDetail(tid,order,live){const w=window.open("","_blank","width=920,height=720");const html=`<html><head><meta charset="utf-8"><title>Transação ${escapeHTML(tid)}</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:Inter,-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:0;background:#0b0f14;color:#e7eaee}pre{white-space:pre-wrap;word-break:break-word;background:#0e141b;padding:12px;border-radius:12px;border:1px solid #1f232b;overflow:auto;color:#dbe8f5}h1{font-size:20px;margin:16px}section{border-top:1px solid #1f232b;padding:16px}</style></head><body><h1>Transação ${escapeHTML(tid)}</h1><section><h3>Ordem</h3><pre>${escapeHTML(JSON.stringify(order,null,2))}</pre></section><section><h3>Consulta ao vivo</h3><pre>${escapeHTML(JSON.stringify(live,null,2))}</pre></section></body></html>`;w.document.write(html);w.document.close()}
+function renderReceipt(tid){getJSON("/superadmin/api/transactions/"+tid+"/receipt").then(d=>{if(!d.ok){toast(d.error||"Erro no comprovante");return}const p=d;const w=window.open("","_blank","width=900,height=800");const html=`<html><head><meta charset="utf-8"><title>Comprovante ${escapeHTML(p.transaction_id)}</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;background:#0b0f14;color:#e7eaee;font-family:Inter,-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;padding:24px} .card{max-width:900px;margin:0 auto;border:1px solid #1f232b;border-radius:18px;padding:24px;background:#0e141b;box-shadow:0 20px 60px rgba(0,0,0,.45)} h1{font-size:22px;margin:0 0 12px} h2{font-size:16px;margin:24px 0 8px;color:#9aa3af;text-transform:uppercase;letter-spacing:.06em} table{width:100%;border-collapse:collapse} td,th{text-align:left;padding:10px;border-bottom:1px solid #1f232b;font-size:14px;vertical-align:top} .kpi{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0} .pill{display:inline-block;padding:6px 12px;border-radius:999px;background:#101826;border:1px solid #1b2330;font-size:12px;color:#cfe3ff} .amount{font-weight:800;font-size:18px} .footer{margin-top:16px;font-size:12px;color:#9aa3af} .row{display:flex;gap:10px;align-items:center;justify-content:space-between} .btn{appearance:none;border:0;border-radius:12px;padding:10px 14px;background:linear-gradient(180deg,#0ea5e9 0%,#22d3ee 100%);color:#041018;font-weight:800;cursor:pointer} .actions{display:flex;justify-content:flex-end;margin-top:16px}</style></head><body><div class="card"><h1>Comprovante de Pagamento</h1><div class="kpi"><div class="pill">TID: ${escapeHTML(p.transaction_id)}</div><div class="pill">${escapeHTML(String(p.status))}</div><div class="pill">${p.webhook_verified?'Webhook verificado':'Verificação manual/consulta'}</div></div><h2>Valores</h2><table><tr><th>Valor</th><td class="amount">${escapeHTML(p.amount_display)}</td></tr><tr><th>Plano</th><td>${escapeHTML((p.plan&&p.plan.name)||"")} (${escapeHTML((p.plan&&p.plan.key)||"")})</td></tr><tr><th>Período</th><td>${escapeHTML((p.plan&&p.plan.period)||"")}</td></tr><tr><th>Limite por dia</th><td>${escapeHTML(String((p.plan&&p.plan.limit_per_day)||""))}</td></tr><tr><th>Suporte</th><td>${escapeHTML((p.plan&&p.plan.support)||"")}</td></tr></table><h2>Pagador</h2><table><tr><th>Usuário</th><td>${escapeHTML((p.user&&p.user.username)||"")}</td></tr><tr><th>E-mail</th><td>${escapeHTML((p.user&&p.user.email)||"")}</td></tr><tr><th>Nome completo</th><td>${escapeHTML((p.user&&p.user.fullname)||"")}</td></tr><tr><th>CPF</th><td>${escapeHTML((p.user&&p.user.cpf)||"")}</td></tr></table><h2>Transação</h2><table><tr><th>Criada em</th><td>${escapeHTML(String(p.created_at||""))}</td></tr><tr><th>Paga em</th><td>${escapeHTML(String(p.paid_at||""))}</td></tr></table><h2>Entrega do Serviço</h2><table><tr><th>Plano ativo</th><td>${p.service_delivery&&p.service_delivery.plan_activated?'Sim':'Não'}</td></tr><tr><th>Snapshot do plano</th><td><pre style="white-space:pre-wrap;background:#0b1118;border:1px solid #1f232b;border-radius:12px;padding:10px;color:#cfe3ff">${escapeHTML(JSON.stringify(p.service_delivery&&p.service_delivery.plan_snapshot,null,2))}</pre></td></tr></table><h2>Dados PushinPay</h2><table><tr><th>Resposta de criação</th><td><pre style="white-space:pre-wrap;background:#0b1118;border:1px solid #1f232b;border-radius:12px;padding:10px;color:#cfe3ff">${escapeHTML(JSON.stringify(p.pushinpay_response,null,2))}</pre></td></tr><tr><th>Última consulta</th><td><pre style="white-space:pre-wrap;background:#0b1118;border:1px solid #1f232b;border-radius:12px;padding:10px;color:#cfe3ff">${escapeHTML(JSON.stringify(p.pushinpay_last,null,2))}</pre></td></tr></table><div class="actions"><button class="btn" onclick="window.print()">Imprimir</button></div><div class="footer">Este comprovante comprova o pagamento e a entrega do serviço referente ao plano indicado.</div></div></body></html>`;w.document.write(html);w.document.close()}).catch(e=>{toast("Não foi possível gerar o comprovante")})}
 function exportTx(){const q=$("#t-q").value.trim();const status=$("#t-status").value;const from=$("#t-from").value;const to=$("#t-to").value;const url="/superadmin/api/export/transactions.csv"+qs({q,status,from:from?new Date(from).toISOString():"",to:to?new Date(to).toISOString():""});window.location.href=url}
-function exportUsers(){window.location.href="/superadmin/api/export/users.csv"}
-function loadAudit(){const size=parseInt($("#a-size").value,10);state.audit.size=size;getJSON("/superadmin/api/audit"+qs({page:state.audit.page,size:state.audit.size})).then(d=>{if(!d.ok)throw new Error();state.audit.total=d.total;state.audit.items=d.items;renderAudit()}).catch(()=>{})}
-function renderAudit(){const tb=$("#a-table tbody");tb.innerHTML="";(state.audit.items||[]).forEach(it=>{const tr=document.createElement("tr");tr.innerHTML=`<td>${fmtDate(it.created_at)}</td><td>${it.action||""}</td><td>${it.actor_id||""}</td><td>${fmtTarget(it.target)}</td><td><pre style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:8px">${escapeHTML(JSON.stringify({payload:it.payload,result:it.result},null,2))}</pre></td>`;tb.appendChild(tr)});const start=(state.audit.page-1)*state.audit.size+1;const end=Math.min(state.audit.page*state.audit.size,state.audit.total);$("#a-info").textContent=state.audit.total?`${start}–${end} de ${state.audit.total}`:"0 de 0"}
-function fmtTarget(t){if(!t)return"";if(typeof t==="string")return t;try{return JSON.stringify(t)}catch(e){return""}}
+function exportUsers(){const q=$("#u-q").value.trim();const admin=$("#u-admin").value;const url="/superadmin/api/export/users.csv"+qs({q,admin});window.location.href=url}
+function loadAudit(){const size=parseInt($("#a-size").value,10);state.audit.size=size;getJSON("/superadmin/api/audit"+qs({page:state.audit.page,size:state.audit.size})).then(d=>{if(!d.ok)throw new Error();state.audit.total=d.total;state.audit.items=d.items;renderAudit()}).catch(e=>{toast("Erro ao carregar auditoria")})}
+function renderAudit(){const tb=$("#a-table tbody");tb.innerHTML="";(state.audit.items||[]).forEach(it=>{const tr=document.createElement("tr");tr.innerHTML=`<td>${fmtDate(it.created_at)}</td><td>${escapeHTML(it.action||"")}</td><td>${escapeHTML(it.actor_id||"")}</td><td>${fmtTarget(it.target)}</td><td><pre style="background:#0b1118;border:1px solid #1f232b;border-radius:12px;padding:8px;color:#cfe3ff">${escapeHTML(JSON.stringify({payload:it.payload,result:it.result},null,2))}</pre></td>`;tb.appendChild(tr)});const start=(state.audit.page-1)*state.audit.size+1;const end=Math.min(state.audit.page*state.audit.size,state.audit.total);$("#a-info").textContent=state.audit.total?`${start}–${end} de ${state.audit.total}`:"0 de 0"}
+function fmtTarget(t){if(!t)return"";if(typeof t==="string")return escapeHTML(t);try{return escapeHTML(JSON.stringify(t))}catch(e){return""}}
 function openConfirm(text,fn){$("#mc-text").textContent=text;$("#mc-yes").onclick=function(){closeModal("#modal-confirm");fn&&fn()};openModal("#modal-confirm")}
+function loadConfigEngPreview(){}
+function openEng(){getJSON("/superadmin/api/config/engineering").then(d=>{const data=d.data||{};$("#eng-username").value=data.username||"";$("#eng-link").value=data.link||"";openModal("#modal-eng")}).catch(e=>{$("#eng-username").value="";$("#eng-link").value="";openModal("#modal-eng")})}
+function saveEng(){const username=$("#eng-username").value.trim();const link=$("#eng-link").value.trim();postJSON("/superadmin/api/config/engineering",{username,link}).then(r=>{if(r.ok&&r.body.ok){toast("Configurações salvas");closeModal("#modal-eng")}else{toast(r.body.error||"Erro ao salvar")}})}
 $(".tab[data-tab='users']").onclick=()=>setActiveTab("users")
 $(".tab[data-tab='transactions']").onclick=()=>setActiveTab("transactions")
 $(".tab[data-tab='audit']").onclick=()=>setActiveTab("audit")
+$(".tab[data-tab='settings']").onclick=()=>setActiveTab("settings")
+$("#btn-eng").onclick=openEng
 $("#refreshAll").onclick=()=>{loadRevenue();loadUsers();loadTx();loadAudit()}
 $("#u-refresh").onclick=()=>{state.users.page=1;loadUsers()}
 $("#u-prev").onclick=()=>{if(state.users.page>1){state.users.page--;loadUsers()}}
@@ -283,6 +339,9 @@ $("#mp-cancel").onclick=()=>closeModal("#modal-plan")
 $("#mp-save").onclick=savePlan
 $("#mc-close").onclick=()=>closeModal("#modal-confirm")
 $("#mc-cancel").onclick=()=>closeModal("#modal-confirm")
+$("#eng-close").onclick=()=>closeModal("#modal-eng")
+$("#eng-cancel").onclick=()=>closeModal("#modal-eng")
+$("#eng-save").onclick=saveEng
 loadRevenue()
 loadUsers()
 loadTx()
