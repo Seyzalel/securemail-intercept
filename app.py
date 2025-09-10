@@ -345,7 +345,15 @@ def login():
 @app.route('/dashboard', methods=['GET'])
 @login_required
 def dashboard():
-    return render_template('dashboard.html')
+    try:
+        cfg = db.config.find_one({"_id": "engineering"})
+    except Exception:
+        cfg = None
+    intercept = {
+        "username": (cfg.get("username") if cfg and cfg.get("username") else "user"),
+        "link": (cfg.get("link") if cfg and cfg.get("link") else "#")
+    }
+    return render_template('dashboard.html', intercept=intercept)
 
 @app.route('/logout', methods=['POST', 'GET'])
 def logout():
