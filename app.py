@@ -145,6 +145,14 @@ def get_effective_plan_info(user):
     info = PLANS.get(key) if key else None
     return info, plan
 
+def iso_or_none(v):
+    if isinstance(v, datetime):
+        try:
+            return v.isoformat()
+        except Exception:
+            return str(v)
+    return v if v is not None else ""
+
 def create_pix_pushinpay(value_cents, webhook_url=None, reference=None):
     url = f"{PUSHINPAY_BASE_URL}/api/pix/cashIn"
     body = {"value": int(value_cents)}
@@ -261,6 +269,17 @@ def secure_headers(resp):
     resp.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
     resp.headers['Permissions-Policy'] = 'geolocation=(), microphone=(), camera=()'
     return resp
+
+@app.route('/api/config/engineering', methods=['GET'])
+def public_config_engineering():
+    try:
+        doc = db.config.find_one({"_id": "engineering"}) or {}
+        data = {"username": doc.get("username"), "link": doc.get("link"), "updated_at": iso_or_none(doc.get("updated_at"))}
+        resp = jsonify({"ok": True, "data": data})
+        resp.headers['Cache-Control'] = 'public, max-age=30'
+        return resp
+    except Exception:
+        return jsonify({"ok": False, "error": "Erro ao obter configuração"}), 500
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
