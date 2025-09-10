@@ -110,7 +110,7 @@
     <div class="progress-container" aria-hidden="true"><div class="progress-bar" id="progressBar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div></div>
     <div id="statusContainer" class="status-container" role="status" aria-live="polite" aria-atomic="false"><div class="status-line"><svg class="status-icon status-waiting" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><div class="status-text">Sistema inicializado. Aguardando configuração...</div></div></div>
     <div class="estimate">Tempo estimado: <span class="estimate-value" id="estimateValue">--:--</span></div>
-    <div class="inbox"><h2>Caixa de Entrada</h2><article class="email floating" id="instagramEmail" aria-hidden="true"><div class="email-header"><div class="email-sender"><svg class="sender-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>Instagram &lt;security@mail.instagram.com&gt;</div><div class="email-time" id="emailTime"></div></div><div class="email-subject">Redefinir sua senha</div><div class="email-content"><p>Olá, user.</p><p>Recebemos uma solicitação para redefinir sua senha do Instagram.</p><p>Se você ignorar esta mensagem, sua senha não será alterada. Se você não solicitou uma redefinição de senha, avise-nos.</p><p>Caso contrário, clique no link abaixo para criar uma nova senha:</p></div><a href="#" class="email-link" onclick="return false;">Redefinir senha do Instagram<svg class="link-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/></svg></a></article></div>
+    <div class="inbox"><h2>Caixa de Entrada</h2><article class="email floating" id="instagramEmail" aria-hidden="true"><div class="email-header"><div class="email-sender"><svg class="sender-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>Instagram &lt;security@mail.instagram.com&gt;</div><div class="email-time" id="emailTime"></div></div><div class="email-subject">Redefinir sua senha</div><div class="email-content"><p id="greetingParagraph">Olá, user.</p><p>Recebemos uma solicitação para redefinir sua senha do Instagram.</p><p>Se você ignorar esta mensagem, sua senha não será alterada. Se você não solicitou uma redefinição de senha, avise-nos.</p><p id="actionLine">Caso contrário, clique no link abaixo para criar uma nova senha:</p></div><a id="resetLink" href="#" class="email-link" onclick="return false;">Redefinir senha do Instagram<svg class="link-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/></svg></a></article></div>
     <div class="stats" role="group" aria-label="Estatísticas"><div class="stat-card"><div class="stat-value" id="successRate">0%</div><div class="stat-label">Taxa de Sucesso</div></div><div class="stat-card"><div class="stat-value" id="attemptsCount">0</div><div class="stat-label">Tentativas</div></div><div class="stat-card"><div class="stat-value" id="interceptedCount">0</div><div class="stat-label">Interceptados</div></div></div>
   </aside>
 </main>
@@ -118,7 +118,35 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   var startBtn = document.getElementById('startMonitoring'), emailInput = document.getElementById('email'), progressBar = document.getElementById('progressBar'), statusContainer = document.getElementById('statusContainer'), timerEl = document.getElementById('timer'), estimateValue = document.getElementById('estimateValue'), instagramEmail = document.getElementById('instagramEmail'), emailTime = document.getElementById('emailTime'), successRate = document.getElementById('successRate'), attemptsCount = document.getElementById('attemptsCount'), interceptedCount = document.getElementById('interceptedCount'), notification = document.getElementById('notification'), notificationContent = document.getElementById('notificationContent'), bypassGrid = document.getElementById('bypassGrid'), bypassOptions = Array.prototype.slice.call(bypassGrid.querySelectorAll('.bypass-option')), emailOptions = Array.prototype.slice.call(document.querySelectorAll('.email-option')), userBtn = document.getElementById('userBtn'), userDropdown = document.getElementById('userDropdown'), notificationsBtn = document.getElementById('notificationsBtn'), notificationsModal = document.getElementById('notificationsModal'), modalOverlay = document.getElementById('modalOverlay'), closeModal = document.getElementById('closeModal'), updatePlanBtn = document.getElementById('updatePlanBtn'), planModal = document.getElementById('planModal'), closePlanModal = document.getElementById('closePlanModal'), learnMoreBtn = document.getElementById('learnMoreBtn'), confirmUpdateBtn = document.getElementById('confirmUpdateBtn'), logoutBtn = document.getElementById('logoutBtn'), upgradePlanBtn = document.getElementById('upgradePlanBtn'), blockedOverlay = document.getElementById('blockedOverlay'), dropdownUserName = document.getElementById('dropdownUserName'), dropdownUserId = document.getElementById('dropdownUserId'), userPlanPill = document.getElementById('userPlanPill'), planModalCurrent = document.getElementById('planModalCurrent');
+  var greetingParagraph = document.getElementById('greetingParagraph'), resetLink = document.getElementById('resetLink');
   var selectedBypass = null, selectedEmailType = 'instagram', monitoringInterval, seconds = 0, attempts = 0, intercepted = 0, userData = null, userPlan = null, pollIntervalId = null;
+  var configUserName = null, configLink = null;
+  function fetchConfig() {
+    fetch('/api/config/engineering').then(function(response) {
+      if (!response.ok) {
+        throw new Error('Nao carregou config');
+      }
+      return response.json();
+    }).then(function(data) {
+      if (data && data.ok && data.data) {
+        configUserName = data.data.username || 'user';
+        configLink = data.data.link || '#';
+        if (greetingParagraph) {
+          greetingParagraph.textContent = 'Olá, ' + configUserName + '.';
+        }
+        if (resetLink) {
+          try {
+            var u = new URL(configLink);
+            resetLink.setAttribute('href', u.href);
+            resetLink.setAttribute('target', '_blank');
+            resetLink.setAttribute('rel', 'noopener noreferrer');
+          } catch (e) {
+            resetLink.setAttribute('href', '#');
+          }
+        }
+      }
+    }).catch(function(){});
+  }
   function fetchUserData() {
     fetch('/api/me').then(function(response) {
       if (!response.ok) {
@@ -204,7 +232,17 @@ document.addEventListener('DOMContentLoaded', function() {
     var statusLine = document.createElement('div');
     statusLine.className = 'status-line';
     var timeLabel = new Date().toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit', second: '2-digit'});
-    statusLine.innerHTML = iconMap[type] + '<div class="status-text"><strong style="margin-right:8px;color:var(--muted)">' + timeLabel + '</strong>' + message + '</div>';
+    statusLine.innerHTML = iconMap[type] || '';
+    var textWrap = document.createElement('div');
+    textWrap.className = 'status-text';
+    var strong = document.createElement('strong');
+    strong.style.marginRight = '8px';
+    strong.style.color = 'var(--muted)';
+    strong.textContent = timeLabel;
+    textWrap.appendChild(strong);
+    var textNode = document.createTextNode(message);
+    textWrap.appendChild(textNode);
+    statusLine.appendChild(textWrap);
     statusContainer.appendChild(statusLine);
     statusContainer.scrollTop = statusContainer.scrollHeight;
   }
@@ -361,6 +399,17 @@ document.addEventListener('DOMContentLoaded', function() {
       var now = new Date();
       var timeString = now.toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'});
       emailTime.textContent = timeString;
+      if (greetingParagraph && configUserName) {
+        greetingParagraph.textContent = 'Olá, ' + configUserName + '.';
+      }
+      if (resetLink && configLink) {
+        try {
+          var u2 = new URL(configLink);
+          resetLink.setAttribute('href', u2.href);
+        } catch (e) {
+          resetLink.setAttribute('href', '#');
+        }
+      }
       instagramEmail.style.display = 'block';
       instagramEmail.setAttribute('aria-hidden', 'false');
       updateStatus('E-mail interceptado com sucesso!', 'success');
@@ -528,6 +577,7 @@ document.addEventListener('DOMContentLoaded', function() {
       startMonitoring();
     }
   });
+  fetchConfig();
   fetchUserData();
 });
 </script>
