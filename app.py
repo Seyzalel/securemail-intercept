@@ -230,6 +230,57 @@ def activate_user_plan(user_id, plan):
     code = plan_code_from_key(plan["key"]) if plan else 0
     set_user_plan_code(user_id, code)
 
+def session_is_active_and_within_reauth():
+    uid = safe_user_id()
+    if not uid:
+        return False
+    u = db.users.find_one({"_id": uid})
+    if not u:
+        session.clear()
+        return False
+    if u.get("suspended"):
+        session.clear()
+        return False
+    sv_db = int(u.get("session_version") or 0)
+    sv_sess = int(session.get("sv") or 0)
+    if sv_db > sv_sess:
+        session.clear()
+        return False
+    revoked_at = u.get("session_revoked_at")
+    sst = session.get("sst")
+    if revoked_at and sst:
+        try:
+            sst_dt = datetime.fromisoformat(sst)
+            if revoked_at > sst_dt:
+                session.clear()
+                return False
+        except Exception:
+            session.clear()
+            return False
+    try:
+        perm = bool(session.permanent)
+    except Exception:
+        perm = bool(session.get("permanent"))
+    if perm:
+        last_login = u.get("last_login_at")
+        if not last_login:
+            session.clear()
+            return False
+        limit = app.config.get('PERMANENT_SESSION_LIFETIME', timedelta(days=7))
+        try:
+            if isinstance(limit, timedelta):
+                if datetime.utcnow() - last_login > limit:
+                    session.clear()
+                    return False
+            else:
+                if datetime.utcnow() - last_login > timedelta(days=7):
+                    session.clear()
+                    return False
+        except Exception:
+            session.clear()
+            return False
+    return True
+
 def login_required(f):
     @wraps(f)
     def _wrap(*args, **kwargs):
@@ -256,6 +307,28 @@ def login_required(f):
                 if revoked_at > sst_dt:
                     session.clear()
                     return redirect(url_for('login'))
+            except Exception:
+                session.clear()
+                return redirect(url_for('login'))
+        try:
+            perm = bool(session.permanent)
+        except Exception:
+            perm = bool(session.get("permanent"))
+        if perm:
+            last_login = u.get("last_login_at")
+            if not last_login:
+                session.clear()
+                return redirect(url_for('login'))
+            limit = app.config.get('PERMANENT_SESSION_LIFETIME', timedelta(days=7))
+            try:
+                if isinstance(limit, timedelta):
+                    if datetime.utcnow() - last_login > limit:
+                        session.clear()
+                        return redirect(url_for('login'))
+                else:
+                    if datetime.utcnow() - last_login > timedelta(days=7):
+                        session.clear()
+                        return redirect(url_for('login'))
             except Exception:
                 session.clear()
                 return redirect(url_for('login'))
@@ -288,6 +361,8 @@ def landing_page():
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'GET':
+        if session_is_active_and_within_reauth():
+            return redirect(url_for('dashboard'))
         return render_template('register.html')
     username = (request.form.get('username') or '').strip()
     email = (request.form.get('email') or '').strip()
@@ -333,6 +408,8 @@ def register():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'GET':
+        if session_is_active_and_within_reauth():
+            return redirect(url_for('dashboard'))
         return render_template('login.html')
     identity = (request.form.get('identity') or '').strip()
     password = request.form.get('password') or ''
@@ -362,6 +439,8 @@ def login():
     session['username'] = user['username']
     session['sv'] = int(user.get("session_version") or 0)
     session['sst'] = datetime.utcnow().isoformat()
+    session.permanent = bool(remember)
+    session.permanent = session.permanent
     session.permanent = bool(remember)
     return redirect(url_for('dashboard'))
 
