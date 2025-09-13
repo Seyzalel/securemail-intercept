@@ -281,6 +281,10 @@ def public_config_engineering():
     except Exception:
         return jsonify({"ok": False, "error": "Erro ao obter configuração"}), 500
 
+@app.route('/')
+def landing_page():
+    return render_template('landing_page.html')
+
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'GET':
